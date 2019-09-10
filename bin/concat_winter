@@ -4,11 +4,11 @@
 # dimension for the following variables:
 #     from h3 file:  U, V, OMEGA, PS, P0, hyam, hybm
 #     from h4 file:  T
-# USAGE: >>./concat_winter.sh <winter index> <output path>
+# USAGE: >>./concat_winter <winter index> <output path>
 #     winter index is 0 for 07-08 winter, 1 for 08-09, etc.
-
-# Load modules
-module load gcc/7.1.0-fasrc01 nco/4.7.4-fasrc01
+# if running on Harvard Odyssey, load the following modules first:
+#     gcc/7.1.0-fasrc01
+#     nco/4.7.4-fasrc01
 
 # Define list of variables to save
 VAR_LIST_H3=U,V,OMEGA,PS,P0,hyam,hybm
@@ -18,7 +18,13 @@ echo "Storing variables: $VAR_LIST_H3 (from h3), $VAR_LIST_H4 (from h4)"
 # Read winter index and output path from command line argument
 # index 0 is 07-08 winter, index 1 is 08-09, etc.
 if [ $# -lt 2 ]; then
-  echo "Not enough arguments; must provide winter index and path to output file"
+  echo "ERROR: Not enough arguments; must provide winter index and path to output file"
+  echo "Usage: >>concat_winter <winter index> <output path>"
+  echo "    winter index is 0 for 07-08 winter, 1 for 08-09, etc."
+  echo "    Using NCO command-line functions, this script takes Nov-Dec from the first"
+  echo "    year of the winter index and Jan-Feb from the second year and concatenates"
+  echo "    along the time dimension, preserving the variables defined internally by"
+  echo "    VAR_LIST_H3 and VAR_LIST_H4"
   exit 2
 else
   WIDX=$1
