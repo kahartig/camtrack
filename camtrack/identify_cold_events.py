@@ -19,32 +19,28 @@ check variable names and dimensions for landfrac, 2m temperature, etc
 # Standard Imports
 import numpy as np
 from netCDF4 import Dataset
+import cftime
 import os
-import datetime
 import sys
 
-#def check_valid_bounds(bound_type, bounds):
-#	"""
-#	"""
-#	lower = bounds[0]
-#	upper = bounds[1]
 
 def subset_by_timelatlon(filename, winter_idx, lat_bounds, lon_bounds, landfrac_min):
 	"""
-	filename: os.path to concatenated netCDF file
+	filename: path to concatenated netCDF file
 	winter_idx: index of winter under study
 	lat_bounds: list-like of [min_lat, max_lat]
 	lon_bounds: list-like of [min_lon, max_lon]
 	landfrac_min: minumum landfraction threshold to consider "over land"
 	"""
 	nc_file = Dataset(filename)
-	latitudes = nc_file.variables['lat'][:]  # WHY NO .DATA FOR LAT AND LON??????
-	longitudes = nc_file.variables['lon'][:]
-	times = nc_file.variables['time'][:].data
+	latitudes = nc_file.variables['lat'][:].data
+	longitudes = nc_file.variables['lon'][:].data
+	time_object = nc_file.variables['time']
+	times = time_object[:].data
 
 	# time subset: define winter as Dec-Jan-Feb
-	min_time = datetime.datetime.toordinal(datetime.datetime(year = 7 + winter_idx, month = 12, day = 1))
-	max_time = datetime.datetime.toordinal(datetime.datetime(year = 8 + winter_idx, month = 3, day = 1))
+	min_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 1), time_object.units, calendar=time_object.calendar) 
+	max_time = cftime.date2num(cftime.datetime(8 + winter_idx, 3, 1), time_object.units, calendar=time_object.calendar) 
 	time_subset = np.where(np.logical_and(times >= min_time, times < max_time))
 
 	# latitude subset:
@@ -68,3 +64,15 @@ def subset_by_timelatlon(filename, winter_idx, lat_bounds, lon_bounds, landfrac_
 
 	# take temperatures over land
 	#temp_2m_land = 
+
+def check_time_dimension(file, winter_idx):
+	"""
+	Check that time dimension matches up with expected start and end times of netCDF file in ordinal format
+	"""
+	time_object = file.variables['time']
+	time_list = time_object[:].data
+	expected_start = cftime.date2num(cftime.datetime(7 + winter_idx, 11, 1), time_object.units, calendar=time_object.calendar) 
+	expected_end = cftime.date2num(cftime.datetime(8 + winter_idx, 3, 1), time_object.units, calendar=time_object.calendar) 
+	tol = 1e-4  # tolerance for "is equal"
+	if (abs(time_list[0] - expected_start) > tol) or (abs(time_list[-1] - expected_end) > tol):
+		raise ValueError('Time dimension of netCDF input file does not match expected time bounds, from 00{:02.0f}-11-01 to 00{:02.0f}-03-01'.format(7 + winter_idx, 8 + winter_idx))
