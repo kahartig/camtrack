@@ -73,16 +73,18 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	creates a slice for the interval [low_bound, upper_bound]
 	raises an error if any non-infinite bounds are outside the range of the dimension
 	"""
-	dimension = file.variables[dimension_key][:].data
+	if not isinstance(file, Dataset):
+		raise TypeError('File argument must be an instance of the netCDF4 Dataset class; given type {}'.format(type(file)))
+	else:
+		dimension = file.variables[dimension_key][:].data
+
 	increasing = np.all(np.diff(dimension) > 0) # True if dimension is monotonically increasing
 	if not increasing:
 		raise ValueError("NetCDF dimension '{}' must be monotonically increasing to produce valid index slices.".format(dimension_key))
-	if not np.isinf(low_bound):
-		if not ((low_bound >= dimension[0]) and (low_bound <= dimension[-1])):
-			raise ValueError("Lower bound on index slice ({:.2f}) should be within the range of dimension '{}', which runs from {:.4f} to {:.4f} ".format(low_bound, dimension_key, dimension[0], dimension[-1]))
-	if not np.isinf(upper_bound):
-		if not ((upper_bound >= dimension[0]) and (upper_bound <= dimension[-1])):
-			raise ValueError("Upper bound on index slice ({:.2f}) should be within the range of dimension '{}', which runs from {:.4f} to {:.4f} ".format(upper_bound, dimension_key, dimension[0], dimension[-1]))
+	if not np.isinf(low_bound) and not ((low_bound >= dimension[0]) and (low_bound <= dimension[-1])):
+		raise ValueError("Lower bound on index slice ({:.2f}) should be within the range of dimension '{}', which runs from {:.4f} to {:.4f} ".format(low_bound, dimension_key, dimension[0], dimension[-1]))
+	if not np.isinf(upper_bound) and not ((upper_bound >= dimension[0]) and (upper_bound <= dimension[-1])):
+		raise ValueError("Upper bound on index slice ({:.2f}) should be within the range of dimension '{}', which runs from {:.4f} to {:.4f} ".format(upper_bound, dimension_key, dimension[0], dimension[-1]))
 	slice_idx_list = np.squeeze(np.where(np.logical_and(dimension >= low_bound, dimension <= upper_bound)))
 	return slice(slice_idx_list[0], slice_idx_list[-1]+1)
 
