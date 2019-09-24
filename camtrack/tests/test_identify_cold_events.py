@@ -9,7 +9,7 @@ import os
 from netCDF4 import Dataset
 
 # Testing imports
-from numpy.testing import assert_raises, assert_equal, assert_almost_equal, assert_array_equal
+from numpy.testing import assert_raises, assert_equal, assert_allclose, assert_array_equal
 
 # camtrack imports
 from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bounds
@@ -17,7 +17,8 @@ from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bound
 # Globals
 NC_SAMPLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample_CAM4_for_nosetests.nc')
 NC_SAMPLE_FILE = Dataset(NC_SAMPLE_PATH)
-
+PS_SUBSET_FIRST_VALUE = 100703.13 # value of 'PS' for time=2889., lat=86.2, lon=12.5
+PS_SUBSET_LAST_VALUE = 99774.55 # value of 'PS' for time=2895., lat=90, lon=17.5
 
 # subset by time, lat, and lon
 def test_slice_file_type():
@@ -48,4 +49,14 @@ def test_slice_good_timeslice():
     time_slice = slice_from_bounds(NC_SAMPLE_FILE, 'time', 2890, 2891)
     sliced_time = NC_SAMPLE_FILE.variables['time'][time_slice].data
     assert_array_equal(expected_timelist, sliced_time)
+
+def test_full_subset_timelatlon():
+    filename = NC_SAMPLE_PATH
+    winter_idx= 1
+    var_key = 'PS'
+    lat_min = 85 # should pull (86.2, 88.1, 90)
+    lon_bounds = (12, 18) # should pull (12.5, 15, 17.5)
+    subsetted_data = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
+    assert_allclose(subsetted_data[0,0,0], PS_SUBSET_FIRST_VALUE)
+    assert_allclose(subsetted_data[-1,-1,-1], PS_SUBSET_LAST_VALUE)
 

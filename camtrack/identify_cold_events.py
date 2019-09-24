@@ -24,20 +24,26 @@ import os
 import sys
 
 
-def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_bounds):
+def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_bounds, testing=False):
 	"""
 	filename: path to concatenated netCDF file
 	winter_idx: index of winter under study
 	desired_variable_key: string; key of variable to be subset (must be 3-D: [time, lat, lon])
 	lat_lower_bound: integer or float giving lower bound of latitude; upper bound will be maximum lat value (N pole steroegraphic)
 	lon_bounds: list-like of [min_lon, max_lon]
+	if testing=True, uses a different bound for max_time to accomodate sample CAM4 file for nosetests
 	"""
 	nc_file = Dataset(filename)
 	time_object = nc_file.variables['time']
+	latitude_object = nc_file.variables['lat']
+	longitude_object = nc_file.variables['lon']
 
 	# time subset: define winter as Dec-Jan-Feb
-	min_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 1), time_object.units, calendar=time_object.calendar) 
-	max_time = cftime.date2num(cftime.datetime(8 + winter_idx, 2, 28), time_object.units, calendar=time_object.calendar)
+	min_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 1), time_object.units, calendar=time_object.calendar)
+	if testing:
+		max_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 7), time_object.units, calendar=time_object.calendar)
+	else:
+		max_time = cftime.date2num(cftime.datetime(8 + winter_idx, 2, 28), time_object.units, calendar=time_object.calendar)
 
 	# index slices for time, lat, and lon
 	time_subset = slice_from_bounds(nc_file, 'time', min_time, max_time)
@@ -49,7 +55,7 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 
 	# subset data by time, lat, and lon
 	variable_object = nc_file.variables[desired_variable_key]
-	if variable_object.dimensions != ['time', 'lat', 'lon']:
+	if variable_object.dimensions != ('time', 'lat', 'lon'):
 		raise ValueError("Variable {} has dimensions {}; expecting dimensions ['time', 'lat', 'lon']".format(desired_variable_key, variable_object.dimensions))
 	else:
 		return variable_object[time_subset, lat_subset, lon_subset].data
@@ -69,7 +75,7 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 
 def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	"""
-	file: Dataset instance [SHOULD I WRITE AN ISINSTANCE CHECK?]
+	file: Dataset instance
 	creates a slice for the interval [low_bound, upper_bound]
 	raises an error if any non-infinite bounds are outside the range of the dimension
 	"""
