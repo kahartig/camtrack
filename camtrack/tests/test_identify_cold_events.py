@@ -14,13 +14,16 @@ from numpy.testing import assert_raises, assert_equal, assert_allclose, assert_a
 # camtrack imports
 from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bounds
 
-# Globals
+# Sample netCDF file from CAM4
+# time range: 0008-12-01 00:00:00 to 0008-12-07 00:00:00 (YYYY-MM-DD HH:MM:SS)
+# latitude range: 80.52631579 to 90.0
+# longitude range: 10.0 to 20.0 (on 0-360 scale)
 NC_SAMPLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample_CAM4_for_nosetests.nc')
 NC_SAMPLE_FILE = Dataset(NC_SAMPLE_PATH)
 PS_SUBSET_FIRST_VALUE = 100703.13 # value of 'PS' for time=2889., lat=86.2, lon=12.5
 PS_SUBSET_LAST_VALUE = 99774.55 # value of 'PS' for time=2895., lat=90, lon=17.5
 
-# subset by time, lat, and lon
+# tests for slice_from_bounds:
 def test_slice_file_type():
     invalid_file_type = 'null string'
     assert_raises(TypeError, slice_from_bounds, invalid_file_type, 'time', 0)
@@ -32,6 +35,11 @@ def test_slice_file_type():
 #    bad_dimension_var = file.createVariable('null', np.int, ('null',))
 #    bad_dimension_var[:] = np.array([0, 2, 1])
 #    assert_raises(ValueError, slice_from_bounds, file, 'null', 1)
+
+def test_slice_wrong_bound_order():
+    bad_lowbound = 2891
+    bad_upperbound = 2890
+    assert_raises(ValueError, slice_from_bounds, NC_SAMPLE_FILE, 'time', bad_lowbound, bad_upperbound)
 
 def test_slice_lowbound_out_of_range():
     bad_lowbound = -100
@@ -50,13 +58,26 @@ def test_slice_good_timeslice():
     sliced_time = NC_SAMPLE_FILE.variables['time'][time_slice].data
     assert_array_equal(expected_timelist, sliced_time)
 
-def test_full_subset_timelatlon():
+# tests for subset_timelatlon:
+def test_subset_corners():
     filename = NC_SAMPLE_PATH
     winter_idx= 1
     var_key = 'PS'
     lat_min = 85 # should pull (86.2, 88.1, 90)
     lon_bounds = (12, 18) # should pull (12.5, 15, 17.5)
-    subsetted_data = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
-    assert_allclose(subsetted_data[0,0,0], PS_SUBSET_FIRST_VALUE)
-    assert_allclose(subsetted_data[-1,-1,-1], PS_SUBSET_LAST_VALUE)
+    output = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
+    assert_allclose(output['data'][0,0,0], PS_SUBSET_FIRST_VALUE)
+    assert_allclose(output['data'][-1,-1,-1], PS_SUBSET_LAST_VALUE)
 
+def test_subset_dimension_slices():
+    filename = NC_SAMPLE_PATH
+    winter_idx= 1
+    var_key = 'PS'
+    lat_min = 84
+    lon_bounds = (13, 18)
+    expected_lats = np.array([84.31578947, 86.21052632, 88.10526316, 90])
+    expected_lons = np.array([15, 17.5])
+    output = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
+    assert_allclose(output['lat'], expected_lats)
+    assert_allclose(output['lon'], expected_lons)
+    assert_allclose(output['data'].shape, [len(output['time']), len(output['lat']), len(output['lon'])])
