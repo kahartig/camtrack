@@ -17,11 +17,15 @@ from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bound
 # Sample netCDF file from CAM4
 # time range: 0008-12-01 00:00:00 to 0008-12-07 00:00:00 (YYYY-MM-DD HH:MM:SS)
 # latitude range: 80.52631579 to 90.0
-# longitude range: 10.0 to 20.0 (on 0-360 scale)
+# longitude range: 320.0 to 330.0 (on 0-360 scale)
 NC_SAMPLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample_CAM4_for_nosetests.nc')
 NC_SAMPLE_FILE = Dataset(NC_SAMPLE_PATH)
-PS_SUBSET_FIRST_VALUE = 100703.13 # value of 'PS' for time=2889., lat=86.2, lon=12.5
-PS_SUBSET_LAST_VALUE = 99774.55 # value of 'PS' for time=2895., lat=90, lon=17.5
+WINTER_IDX = 1 # index 1 corresponds to 08-09 winter
+PS_SUBSET_FIRST_VALUE = 101194.05 # value of 'PS' for time=2889., lat=86.2, lon=322.5
+PS_SUBSET_LAST_VALUE = 99774.55 # value of 'PS' for time=2895., lat=90, lon=327.5
+T2M_LAST_LAND_VALUE = 240.78333 # value of 'TREFHT' for time=2895., lat=82.4, lon=330.0 (last "on land" point in TREFHT data)
+GRIDPOINTS_ON_LAND = 4  # number of gridpoints with landfraction >= 90 for a single timestep in lat=(82.4-90), lon=(322.5, 330)
+LENGTH_OF_TIMES_DIMENSION = 49
 
 # tests for slice_from_bounds:
 def test_slice_file_type():
@@ -60,24 +64,29 @@ def test_slice_good_timeslice():
 
 # tests for subset_timelatlon:
 def test_subset_corners():
-    filename = NC_SAMPLE_PATH
-    winter_idx= 1
     var_key = 'PS'
     lat_min = 85 # should pull (86.2, 88.1, 90)
-    lon_bounds = (12, 18) # should pull (12.5, 15, 17.5)
-    output = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
-    assert_allclose(output['data'][0,0,0], PS_SUBSET_FIRST_VALUE)
-    assert_allclose(output['data'][-1,-1,-1], PS_SUBSET_LAST_VALUE)
+    lon_bounds = (322, 328) # should pull (322.5, 325 , 327.5)
+    output = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
+    assert_allclose(output['unmasked_data'][0,0,0], PS_SUBSET_FIRST_VALUE)
+    assert_allclose(output['unmasked_data'][-1,-1,-1], PS_SUBSET_LAST_VALUE)
 
 def test_subset_dimension_slices():
-    filename = NC_SAMPLE_PATH
-    winter_idx= 1
     var_key = 'PS'
     lat_min = 84
-    lon_bounds = (13, 18)
+    lon_bounds = (323, 328)
     expected_lats = np.array([84.31578947, 86.21052632, 88.10526316, 90])
-    expected_lons = np.array([15, 17.5])
-    output = subset_by_timelatlon(filename, winter_idx, var_key, lat_min, lon_bounds, testing=True)
+    expected_lons = np.array([325. , 327.5])
+    output = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
     assert_allclose(output['lat'], expected_lats)
     assert_allclose(output['lon'], expected_lons)
-    assert_allclose(output['data'].shape, [len(output['time']), len(output['lat']), len(output['lon'])])
+    assert_allclose(output['unmasked_data'].shape, [len(output['time']), len(output['lat']), len(output['lon'])])
+
+def test_landfrac_masking():
+    var_key = 'TREFHT'
+    lat_min = 81
+    lon_bounds = (321, 330)
+    output = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
+    assert_equal(np.sum(~np.isnan(output['data'])), GRIDPOINTS_ON_LAND*LENGTH_OF_TIMES_DIMENSION)
+    last_unmasked_value = output['data'][np.where(~np.isnan(output['data']))][-1]
+    assert_allclose(last_unmasked_value, T2M_LAST_LAND_VALUE)
