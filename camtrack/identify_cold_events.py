@@ -32,7 +32,7 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 	lat_lower_bound: integer or float giving lower bound of latitude; upper bound will be maximum lat value (N pole steroegraphic)
 	lon_bounds: list-like of [min_lon, max_lon]
 	landfrac_min: minimum value of landfraction categorizing a grid point as "on land" 
-	if testing=True, uses a different bound for max_time to accomodate sample CAM4 file for nosetests
+	if testing=True, uses a different bound for max_time to accomodate sample CAM4 file for nosetests and includes unmasked data in output
 	"""
 	nc_file = Dataset(filename)
 	variable_object = nc_file.variables[desired_variable_key]
@@ -59,10 +59,11 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 
 	# mask by landfraction
 	#   replace any value in variable_subset where landfraction < landfrac_min with np.nan
-	#landfrac_subset = nc_file.variables['LANDFRAC'][time_subset, lat_subset, lon_subset].data
-	#masked_variable = np.where(landfrac_subset >= landfrac_min, variable_subset, np.nan)
-	#subset_dict = {'data': masked_variable, 'unmasked_data': variable_subset, 'time': time_object[time_subset].data, 'lat': latitude_object[lat_subset].data, 'lon': longitude_object[lon_subset].data}
-	subset_dict = {'data': variable_subset, 'time': time_object[time_subset].data, 'lat': latitude_object[lat_subset].data, 'lon': longitude_object[lon_subset].data}
+	landfrac_subset = nc_file.variables['LANDFRAC'][time_subset, lat_subset, lon_subset].data
+	masked_variable = np.where(landfrac_subset >= landfrac_min, variable_subset, np.nan)
+	subset_dict = {'data': masked_variable, 'time': time_object[time_subset].data, 'lat': latitude_object[lat_subset].data, 'lon': longitude_object[lon_subset].data}
+	if testing:
+		subset_dict['unmasked_data'] = variable_subset
 	return subset_dict
 
 
@@ -95,4 +96,17 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	slice_idx_list = np.squeeze(np.where(np.logical_and(dimension >= low_bound, dimension <= upper_bound)))
 	return slice(slice_idx_list[0], slice_idx_list[-1]+1)
 
-# def find_overall_cold_events():
+#def find_overall_cold_events(data_dict, number_of_events, distinct_conditions):
+#"""
+#data_dict: dictionary with 'data', 'time', 'lat', and 'lon' keys
+#distinct_conditions = dictionary with conditions that determine whether events are distinct
+#	includes: 'time_separation', 'lat_separation', 'lon_separation'
+#"""
+#t2m_on_land = data_dict['data']
+#times = data_dict['time']
+#latitudes = data_dict['lat']
+#longitudes = data_dict['lon']
+
+# sort 2m temperatures from lowest to highest
+# sorted_idx is a tuple of index arrays; for ex, times[sorted_idx[0][0]] is the time value of the very coldest point in t2m_on_land
+#idx_sorted_by_temp = np.unravel_index(t2m_on_land.argsort(axis=None), t2m_on_land.shape)
