@@ -12,7 +12,7 @@
 
 # Define list of variables to save
 VAR_LIST_H3=U,V,OMEGA,PS,P0,hyam,hybm
-VAR_LIST_H4=T
+VAR_LIST_H4=T,TREFHT,LANDFRAC
 echo "Storing variables: $VAR_LIST_H3 (from h3), $VAR_LIST_H4 (from h4)"
 
 # Read winter index and output path from command line argument
