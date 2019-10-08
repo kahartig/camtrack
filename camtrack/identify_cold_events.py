@@ -28,7 +28,8 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 	Parameters
 	----------
 	filename: string
-		path to netCDF file of CAM4 output covering at least Dec through Feb of a given year
+		path to netCDF file of CAM4 output covering at least Dec through Feb of
+		a given year
 	winter_idx: integer
 		index of winter under study. 0 is 07-08 year, 1 is 08-09, etc.
 	desired_variable_key: string
@@ -42,9 +43,11 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 		must be in the order (lower bound, upper bound)
 		longitude subset = [lon_bounds[0], lon_bounds[1]]
 	landfrac_min: float between 0 and 1
-		minimum value of landfraction for which a gridpoint will be considered "on land"
+		minimum value of landfraction for which a gridpoint will be considered
+		"on land"
 	testing: boolean
-		if testing=True, activates special conditions on time bounds and output for nosetests
+		if testing=True, activates special conditions on time bounds and output
+		for nosetests
 		default is False
 
 	Returns
@@ -55,7 +58,8 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 			longitude=[lon_bounds[0], lon_bounds[1]] of the variable
 			desired_variable_key, masked by landfraction so that any points with
 			landfraction < landfrac_min have a value of np.nan
-		'time': array of ordinal time values corresponding to subsetted time dimension
+		'time': array of ordinal time values corresponding to subsetted time
+			dimension
 		'lat': array of latitudes corresponding to subsetted lat dimension
 		'lon': array of longitudes corresponding to subsetted lon dimension
 		if testing=True, also includes:
@@ -123,7 +127,8 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 
 	Returns
 	-------
-	slice object spanning the closed interval [low_bound, upper_bound] of the dimension
+	slice object spanning the closed interval [low_bound, upper_bound] of the
+	dimension
 	"""
 	if not isinstance(file, Dataset):
 		raise TypeError('File argument must be an instance of the netCDF4 Dataset class; given type {}'.format(type(file)))
@@ -249,79 +254,79 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 
 
 def print_CONTROL_files(events, traj_heights, backtrack_time, output_dir, traj_dir, data_file_path):
-    """
-    Generate the CONTROL files that HYSPLIT uses to set up a backtracking run
-    based on the entries in 'events'.
+	"""
+	Generate the CONTROL files that HYSPLIT uses to set up a backtracking run
+	based on the entries in 'events'.
 
-    Also creates two directories:
-    	output_dir: where CONTROL files are placed after creation
-    	traj_dir: where trajectory files will be placed when HYSPLIT is run with
-    		these CONTROL files
+	Also creates two directories:
+		output_dir: where CONTROL files are placed after creation
+		traj_dir: where trajectory files will be placed when HYSPLIT is run with
+			these CONTROL files
 
-    CONTROL files will be named CONTROL_winter<winter idx>_event<events idx>
-    	winter idx: taken from 'winter idx' key in events
-    		0 corresponds to 07-08 year, 1 to 08-09, etc.
-    	events idx: the DataFrame index of each event in the events DataFrame
-    trajectory files will be named traj_winter<winter idx>_event<events idx>
+	CONTROL files will be named CONTROL_winter<winter idx>_event<events idx>
+		winter idx: taken from 'winter idx' key in events
+			0 corresponds to 07-08 year, 1 to 08-09, etc.
+		events idx: the DataFrame index of each event in the events DataFrame
+	trajectory files will be named traj_winter<winter idx>_event<events idx>
 
-    Parameters
-    ----------
-    events: Pandas DataFrame
-    	each index/row corresponds to a distinct cold event for which a CONTROL
-    	file will be generated. Columns must include:
-    		'winter index': index of winter during which the event takes place
-    			(07-08 is 0, 08-09 is 1 etc)
-    		'time': time of event in days since 0001-01-01 on 'noleap' calendar
-    		'lat': latitude of event in degrees on -90 to 90 scale
-    		'lon': longitude of event in degrees on 0 to 360 scale
-    traj_heights: array-like
-    	starting heights in meters for each trajectory
-    backtrack_time: integer
-    	number of hours to follow each trajectory back in time
-    output_dir: string
-    	output directory for CONTROL files
-    traj_dir: string
-    	HYSPLIT directory to output trajectory files
-    data_file_path: string
-    	full path and filename of CAM4 data file from which to calculate
-    	trajectories
-    """
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    if not os.path.exists(traj_dir):
-        os.makedirs(traj_dir)
-    for ev_idx, ev_row in events.iterrows():
-    	control_path = os.path.join(output_dir, 'CONTROL_winter{:d}_event{:02d}'.format(ev_row['winter index'], ev_idx))
-    	with open(control_path, 'w') as f:
-    		data_path, data_filename = os.path.split(data_file_path)
-    		t = cftime.num2date(ev_row['time'], 'days since 0001-01-01 00:00:00', calendar='noleap')
-    		lat = ev_row['lat']
-    		if ev_row['lon'] > 180:
-    			# HYSPLIT requires longitude on a -180 to 180 scale
-    			lon = ev_row['lon'] - 360
-    		else:
-    			lon = ev_row['lon']
-    		# Print CONTROL file
-    		# Start time:
-    		f.write('{:02d} {:02d} {:02d} {:02d}\n'.format(t.year, t.month, t.day, t.hour))
-    		# Number of starting positions:
-    		f.write('{:d}\n'.format(len(traj_heights)))
-    		# Starting positions:
-    		for ht in traj_heights:
-    			f.write('{:.1f} {:.1f} {:.1f}\n'.format(lat, lon, ht))
-    		# Duration of backtrack in hours:
-    		f.write('-{:d}\n'.format(backtrack_time))
-    		# Vertical motion option:
-    		f.write('0\n') # 0 to use data's vertical velocity fields
-    		# Top of model:
-    		f.write('10000.0\n')  # in meters above ground level; trajectories terminate when they reach this level
-    		# Number of input files:
-    		f.write('1\n')
-    		# Input file path:
-    		f.write(data_path + '\n')
-    		# Input file name:
-    		f.write(data_filename + '\n')
-    		# Output trajectory file path:
-    		f.write(traj_dir + '\n')
-    		# Output trajectory file name:
-    		f.write('traj_winter{}_event{}'.format(ev_row['winter index'], ev_idx))
+	Parameters
+	----------
+	events: Pandas DataFrame
+		each index/row corresponds to a distinct cold event for which a CONTROL
+		file will be generated. Columns must include:
+			'winter index': index of winter during which the event takes place
+				(07-08 is 0, 08-09 is 1 etc)
+			'time': time of event in days since 0001-01-01 on 'noleap' calendar
+			'lat': latitude of event in degrees on -90 to 90 scale
+			'lon': longitude of event in degrees on 0 to 360 scale
+	traj_heights: array-like
+		starting heights in meters for each trajectory
+	backtrack_time: integer
+		number of hours to follow each trajectory back in time
+	output_dir: string
+		output directory for CONTROL files
+	traj_dir: string
+		HYSPLIT directory to output trajectory files
+	data_file_path: string
+		full path and filename of CAM4 data file from which to calculate
+		trajectories
+	"""
+	if not os.path.exists(output_dir):
+		os.makedirs(output_dir)
+	if not os.path.exists(traj_dir):
+		os.makedirs(traj_dir)
+	for ev_idx, ev_row in events.iterrows():
+		control_path = os.path.join(output_dir, 'CONTROL_winter{:d}_event{:02d}'.format(ev_row['winter index'], ev_idx))
+		with open(control_path, 'w') as f:
+			data_path, data_filename = os.path.split(data_file_path)
+			t = cftime.num2date(ev_row['time'], 'days since 0001-01-01 00:00:00', calendar='noleap')
+			lat = ev_row['lat']
+			if ev_row['lon'] > 180:
+				# HYSPLIT requires longitude on a -180 to 180 scale
+				lon = ev_row['lon'] - 360
+			else:
+				lon = ev_row['lon']
+			# Print CONTROL file
+			# Start time:
+			f.write('{:02d} {:02d} {:02d} {:02d}\n'.format(t.year, t.month, t.day, t.hour))
+			# Number of starting positions:
+			f.write('{:d}\n'.format(len(traj_heights)))
+			# Starting positions:
+			for ht in traj_heights:
+				f.write('{:.1f} {:.1f} {:.1f}\n'.format(lat, lon, ht))
+			# Duration of backtrack in hours:
+			f.write('-{:d}\n'.format(backtrack_time))
+			# Vertical motion option:
+			f.write('0\n') # 0 to use data's vertical velocity fields
+			# Top of model:
+			f.write('10000.0\n')  # in meters above ground level; trajectories terminate when they reach this level
+			# Number of input files:
+			f.write('1\n')
+			# Input file path:
+			f.write(data_path + '\n')
+			# Input file name:
+			f.write(data_filename + '\n')
+			# Output trajectory file path:
+			f.write(traj_dir + '\n')
+			# Output trajectory file name:
+			f.write('traj_winter{}_event{}'.format(ev_row['winter index'], ev_idx))
