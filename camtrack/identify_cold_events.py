@@ -144,5 +144,71 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 			cold_events.loc[num_found]['2m temp'] = t2m_on_land[time_idx, lat_idx, lon_idx]
 			num_found = num_found + 1
 		idx = idx + 1
-
 	return cold_events
+
+
+
+def print_CONTROL_files(events, traj_heights, backtrack_time, output_dir, traj_dir, data_file_path):
+    """
+    Prints out the CONTROL files that HYSPLIT uses to set up a backtracking run using the entries in events.
+    Creates CONTROL files in output_dir. Also creates a subdirectory called traj_dir, which must be in the
+    HYSPLIT working directory, in which the trajectory file will be placed when HYSPLIT is run with these
+    CONTROL files.
+
+    CONTROL files will be named CONTROL_winter<winter idx>_event<events idx>
+    	winter idx: taken from 'winter idx' key in events; 0 corresponds to 07-08 year, 1 to 08-09, etc.
+    	events idx: the DataFrame index of each event in the events DataFrame
+    trajectory files will be named traj_winter<winter idx>_event<events idx>
+
+    Parameters:
+    events: Pandas DataFrame containing details of the particular cold events for which the CONTROL files
+    are being generated. events must contain at least the following:
+        winter idx = index of the winter during which the event takes place (07-08 is 0, 08-09 is 1 etc)
+        time = the time of the event as a real number of days since 0001-01-01 00:00:00 (fractional part for hours)
+        lat = latitude coordinate of the event as a real number of degrees on -90 to 90 scale
+        lon = longitude coordinate of the event as a real number of degrees on 0 to 360 scale
+    traj_heights: array-like of starting height(s) in meters for each event 
+    backtrack_time: hours back in time to follow trajectories; must be positive integer
+    output_dir: output directory for CONTROL files
+    traj_dir: HYSPLIT directory to output trajectory files
+    data_file_path: full path and filename of CAM4 data file
+    """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    if not os.path.exists(traj_dir):
+        os.makedirs(traj_dir)
+    for ev_idx, ev_row in events.iterrows():
+    	control_path = os.path.join(output_dir, 'CONTROL_winter{:d}_event{:02d}'.format(ev_row['winter idx'], ev_idx))
+    	with open(control_path, 'w') as f:
+    		data_path, data_filename = os.path.split(data_file_path)
+    		t = cftime.num2date(ev_row['time'], 'days since 0001-01-01 00:00:00', calendar='noleap')
+    		lat = ev_row['lat']
+    		if ev_row['lon'] > 180:
+    			# HYSPLIT requires longitude on a -180 to 180 scale
+    			lon = ev_row['lon'] - 360
+    		else:
+    			lon = ev_row['lon']
+    		# Print CONTROL file
+    		# Start time:
+    		f.write('{:02d} {:02d} {:02d} {:02d}\n'.format(t.year, t.month, t.day, t.hour))
+    		# Number of starting positions:
+    		f.write('{:d}\n'.format(len(traj_heights)))
+    		# Starting positions:
+    		for ht in traj_heights:
+    			f.write('{:.1f} {:.1f} {:.1f}\n'.format(lat, lon, ht))
+    		# Duration of backtrack in hours:
+    		f.write('-{:d}\n'.format(backtrack_time))
+    		# Vertical motion option:
+    		f.write('0\n') # 0 to use data's vertical velocity fields
+    		# Top of model:
+    		f.write('10000.0\n')  # in meters above ground level; trajectories terminate when they reach this level
+    		# Number of input files:
+    		f.write('1\n')
+    		# Input file path:
+    		f.write(data_path + '\n')
+    		# Input file name:
+    		f.write(data_filename + '\n')
+    		# Output trajectory file path:
+    		f.write(traj_dir + '\n')
+    		# Output trajectory file name:
+    		f.write('traj_winter{}_event{}'.format(ev_row['winter idx'], ev_idx))
