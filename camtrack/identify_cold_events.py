@@ -1,27 +1,20 @@
 """
 Author: Kara Hartig
+	adapted from code written by Pratap Singh
 
 Contains functions to:
 	load a winter netCDF from CAM
 	subset by time, lat, lon, and landfraction
 	identify coldest events
 	print corresponding CONTROL files for HYSPLIT
-
-PROGRESS NOTES:
-need to write tests for subset_by_timelatlon
-	both nosetests and check functions here
-	how can I check that bounds are reasonable?
-check variable names and dimensions for landfrac, 2m temperature, etc
-
-
 """
 
 # Standard Imports
 import numpy as np
+import pandas as pd
 from netCDF4 import Dataset
 import cftime
 import os
-import sys
 
 
 def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_bounds, landfrac_min=0.9, testing=False):
@@ -96,17 +89,60 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	slice_idx_list = np.squeeze(np.where(np.logical_and(dimension >= low_bound, dimension <= upper_bound)))
 	return slice(slice_idx_list[0], slice_idx_list[-1]+1)
 
-#def find_overall_cold_events(data_dict, number_of_events, distinct_conditions):
-#"""
-#data_dict: dictionary with 'data', 'time', 'lat', and 'lon' keys
-#distinct_conditions = dictionary with conditions that determine whether events are distinct
-#	includes: 'time_separation', 'lat_separation', 'lon_separation'
-#"""
-#t2m_on_land = data_dict['data']
-#times = data_dict['time']
-#latitudes = data_dict['lat']
-#longitudes = data_dict['lon']
 
-# sort 2m temperatures from lowest to highest
-# sorted_idx is a tuple of index arrays; for ex, times[sorted_idx[0][0]] is the time value of the very coldest point in t2m_on_land
-#idx_sorted_by_temp = np.unravel_index(t2m_on_land.argsort(axis=None), t2m_on_land.shape)
+def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_conditions):
+	"""
+	two events are "indistinct" only if they violate all three distinct_conditions
+	data_dict: dictionary with 'data', 'time', 'lat', and 'lon' keys
+		data must have dimensions data[time, lat, lon]
+	distinct_conditions = dictionary with conditions that determine whether events are distinct
+		includes: 'min time separation' (fractional days), 'min lat separation' (degrees), 'min lon separation' (degrees)
+	"""
+	t2m_on_land = data_dict['data']
+	times = data_dict['time']
+	latitudes = data_dict['lat']
+	longitudes = data_dict['lon']
+
+	# sort 2m temperatures from lowest to highest
+	# sorted_idx is a tuple of index arrays; for ex, times[sorted_idx[0][0]] is the time value of the very coldest point in t2m_on_land, latitudes[sorted_idx[1][0]] is the corresponding latitude, etc.
+	sorted_idx = np.unravel_index(t2m_on_land.argsort(axis=None), t2m_on_land.shape)
+
+	# initialize DataFrame of cold events
+	cold_events = pd.DataFrame(index=range(number_of_events), columns=['winter index', 'time index', 'time', 'lat index', 'lat', 'lon index', 'lon', '2m temp'])
+
+	# store first (coldest) event
+	cold_events.loc[0] = [winter_idx, sorted_idx[0][0], times[sorted_idx[0][0]], sorted_idx[1][0], latitudes[sorted_idx[1][0]], sorted_idx[2][0], longitudes[sorted_idx[2][0]], t2m_on_land[sorted_idx[0][0], sorted_idx[1][0], sorted_idx[2][0]]]
+
+	# find distinct cold events, starting with second-coldest
+	idx = 1
+	num_found = 1
+	while num_found < number_of_events:
+		print('Start loop for idx {}'.format(idx))
+		time_idx = sorted_idx[0][idx]
+		lat_idx = sorted_idx[1][idx]
+		lon_idx = sorted_idx[2][idx]
+		time = times[time_idx]
+		lat = latitudes[lat_idx]
+		lon = longitudes[lon_idx]
+		# check distinctness conditions:
+		distinct = True
+		for found_idx, found_row in cold_events.iterrows():
+			# NOTE: iterates over empty, pre-allocated rows as well, but should not affect distinct flag
+			if ((abs(time - found_row['time']) < distinct_conditions['min time separation'])
+				and (abs(lat - found_row['lat']) < distinct_conditions['min lat separation'])
+				and (abs(lon - found_row['lon']) < distinct_conditions['min lon separation'])):
+				# indistinct only if overlapping another event simultaneously in time and location
+				distinct = False
+		if distinct:
+			cold_events.loc[num_found]['winter index'] = winter_idx
+			cold_events.loc[num_found]['time index'] = time_idx
+			cold_events.loc[num_found]['time'] = time
+			cold_events.loc[num_found]['lat index'] = lat_idx
+			cold_events.loc[num_found]['lat'] = lat
+			cold_events.loc[num_found]['lon index'] = lon_idx
+			cold_events.loc[num_found]['lon'] = lon
+			cold_events.loc[num_found]['2m temp'] = t2m_on_land[time_idx, lat_idx, lon_idx]
+			num_found = num_found + 1
+		idx = idx + 1
+
+	return cold_events

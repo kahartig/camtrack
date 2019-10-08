@@ -12,7 +12,7 @@ from netCDF4 import Dataset
 from numpy.testing import assert_raises, assert_equal, assert_allclose, assert_array_equal
 
 # camtrack imports
-from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bounds
+from camtrack.identify_cold_events import subset_by_timelatlon, slice_from_bounds, find_overall_cold_events
 
 # Sample netCDF file from CAM4
 # time range: 0008-12-01 00:00:00 to 0008-12-07 00:00:00 (YYYY-MM-DD HH:MM:SS)
@@ -26,6 +26,10 @@ PS_SUBSET_LAST_VALUE = 99774.55 # value of 'PS' for time=2895., lat=90, lon=327.
 T2M_LAST_LAND_VALUE = 240.78333 # value of 'TREFHT' for time=2895., lat=82.4, lon=330.0 (last "on land" point in TREFHT data)
 GRIDPOINTS_ON_LAND = 4  # number of gridpoints with landfraction >= 90 for a single timestep in lat=(82.4-90), lon=(322.5, 330)
 LENGTH_OF_TIMES_DIMENSION = 49
+COLDEST_LAND_TEMPERATURE = 236.67903 # using np.nanmin(temperature masked by landfraction)
+TMIN_INDICES = [22, 1, 1]  # indices of time, lat, lon corresponding to COLDEST_LAND_TEMPERATURE
+THIRD_COLDEST_LAND_TEMPERATURE = 236.76225
+FOURTH_COLDEST_LAND_TEMPERATURE = 236.81648
 
 # tests for slice_from_bounds:
 def test_slice_file_type():
@@ -90,3 +94,27 @@ def test_landfrac_masking():
     assert_equal(np.sum(~np.isnan(output['data'])), GRIDPOINTS_ON_LAND*LENGTH_OF_TIMES_DIMENSION)
     last_unmasked_value = output['data'][np.where(~np.isnan(output['data']))][-1]
     assert_allclose(last_unmasked_value, T2M_LAST_LAND_VALUE)
+
+# tests for find_overall_cold_events:
+def test_find_coldest():
+    data_dict = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', -np.inf, (-np.inf, np.inf), testing=True)
+    null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
+    cold_events = find_overall_cold_events(data_dict, WINTER_IDX, 1, null_distinct)
+    indices_tuple = (cold_events.loc[0, 'time index'], cold_events.loc[0, 'lat index'], cold_events.loc[0, 'lon index'])
+    assert_allclose(cold_events.shape, (1, 8))
+    assert_allclose(cold_events['2m temp'][0], COLDEST_LAND_TEMPERATURE)
+    assert_allclose(indices_tuple, TMIN_INDICES)
+
+def test_find_distinct_in_time():
+    # mark coldest two as indistinct using time separation
+    data_dict = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', -np.inf, (-np.inf, np.inf), testing=True)
+    time_distinct = {'min time separation': 0.1, 'min lat separation': 10.0, 'min lon separation': 10.0} # 1st and 2nd coldest indistinct, 3rd is distinct from first two in time
+    cold_events = find_overall_cold_events(data_dict, WINTER_IDX, 2, time_distinct)
+    assert_allclose(cold_events['2m temp'][1], THIRD_COLDEST_LAND_TEMPERATURE)
+
+def test_find_distinct_in_latlon():
+    # mark coldest three as indistinct using lat/lon separation
+    data_dict = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', -np.inf, (-np.inf, np.inf), testing=True)
+    lon_distinct = {'min time separation': 3.0, 'min lat separation': 10.0, 'min lon separation': 3.0} # 1st-2nd-3rd coldest indistinct, 4th is distinct from first three in longitude
+    cold_events = find_overall_cold_events(data_dict, WINTER_IDX, 2, lon_distinct)
+    assert_allclose(cold_events['2m temp'][1], FOURTH_COLDEST_LAND_TEMPERATURE)
