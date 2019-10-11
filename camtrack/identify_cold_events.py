@@ -86,10 +86,17 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 	lon_subset = slice_from_bounds(nc_file, 'lon', lon_bounds[0], lon_bounds[1])
 
 	# subset data by time, lat, and lon
+	datetime_min = cftime.num2date(min_time, time_object.units, calendar=time_object.calendar)
+	datetime_max = cftime.num2date(max_time, time_object.units, calendar=time_object.calendar)
+	print('Taking a subset in time and location of variable {}:'.format(desired_variable_key))
+	print('    time: {:04d}-{:02d}-{:02d} to {:04d}-{:02d}-{:02d}'.format(datetime_min.year, datetime_min.month, datetime_min.day, datetime_max.year, datetime_max.month, datetime_max.day))
+	print('    latitude: {:+.1f} to {:+.1f}'.format(lat_lower_bound, 90.0))
+	print('    longitude: {:+.1f} to {:+.1f}'.format(lon_bounds[0], lon_bounds[1]))
 	variable_subset = variable_object[time_subset, lat_subset, lon_subset].data
 
 	# mask by landfraction
 	#   replace any value in variable_subset where landfraction < landfrac_min with np.nan
+	print('Masking {} by landfraction: np.nan anywhere landfraction < {:.2f}'.format(desired_variable_key, landfrac_min))
 	landfrac_subset = nc_file.variables['LANDFRAC'][time_subset, lat_subset, lon_subset].data
 	masked_variable = np.where(landfrac_subset >= landfrac_min, variable_subset, np.nan)
 	subset_dict = {'data': masked_variable, 'time': time_object[time_subset].data, 'lat': latitude_object[lat_subset].data, 'lon': longitude_object[lon_subset].data}
@@ -221,8 +228,8 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 	# Find distinct cold events, starting with second-coldest
 	idx = 1
 	num_found = 1
+	print('Starting loop over sorted temperatures to identify cold events...')
 	while num_found < number_of_events:
-		print('Start loop for idx {}'.format(idx))
 		time_idx = sorted_idx[0][idx]
 		lat_idx = sorted_idx[1][idx]
 		lon_idx = sorted_idx[2][idx]
@@ -249,6 +256,7 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 			cold_events.loc[num_found]['2m temp'] = t2m_on_land[time_idx, lat_idx, lon_idx]
 			num_found = num_found + 1
 		idx = idx + 1
+	print('Found {:d} distinct cold events out of the {:d} coldest datapoints in sorted temperature array'.format(number_of_events, idx-1))
 	return cold_events
 
 
