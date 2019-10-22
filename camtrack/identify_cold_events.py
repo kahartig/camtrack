@@ -105,7 +105,7 @@ def subset_by_timelatlon(filename, winter_idx, desired_variable_key, lat_lower_b
 	return subset_dict
 
 
-def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
+def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf, allow_reset=False):
 	"""
 	Given closed bounds [low_bound, upper_bound], return a slice object of the
 	given dimension that spans the range low_bound <= dimension <= upper_bound.
@@ -116,8 +116,8 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	dimension, var[dimension], then var[slice] will return the values of var at
 	locations where dim is in the closed interval [low_bound, upper_bound].
 
-	Raises an error if any of the non-infinite bounds are outside the range of
-	the dimension.
+	If allow_reset is False, raises an error if any of the non-infinite bounds
+	are outside the range of the dimension.
 
 	Parameters
 	----------
@@ -131,6 +131,12 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 	upper_bound: float or np.inf
 		upper bound of closed dimension slice
 		if np.inf, upper bound will be the highest value in the dimension
+	allow_reset: boolean
+		if True and lower [upper] bound is out of range, then replace lower
+		[upper] bound with minimum [maximum] value of dimension instead
+		if False and lower or upper bound is out of range (but not infinity),
+		raise an error
+		Default is False.
 
 	Returns
 	-------
@@ -153,9 +159,17 @@ def slice_from_bounds(file, dimension_key, low_bound, upper_bound=np.inf):
 
 	# bounds are within the dimension range for non-infinite bounds:
 	if not np.isinf(low_bound) and not ((low_bound >= dimension[0]) and (low_bound <= dimension[-1])):
-		raise ValueError("Dimension slicing by index error for dimension {}:\n   lower bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(dimension_key, low_bound, dimension[0], dimension[-1]))
+		if allow_reset:
+			print("WARNING: Lower bound {:.2f} is out of range of dimension '{}'. Re-setting lower bound to minimum value of dimension, {:.2f}".format(low_bound, dimension_key, dimension[0]))
+			low_bound = dimension[0]
+		else:
+			raise ValueError("Dimension slicing by index error for dimension {}:\n   lower bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(dimension_key, low_bound, dimension[0], dimension[-1]))
 	if not np.isinf(upper_bound) and not ((upper_bound >= dimension[0]) and (upper_bound <= dimension[-1])):
-		raise ValueError("Dimension slicing by index error for dimension {}:\n   upper bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(dimension_key, upper_bound, dimension[0], dimension[-1]))
+		if allow_reset:
+			print("WARNING: Upper bound {:.2f} is out of range of dimension '{}'. Re-setting upper bound to maximum value of dimension, {:.2f}".format(low_bound, dimension_key, dimension[-1]))
+			upper_bound = dimension[-1]
+		else:
+			raise ValueError("Dimension slicing by index error for dimension {}:\n   upper bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(dimension_key, upper_bound, dimension[0], dimension[-1]))
 	
 	slice_idx_list = np.squeeze(np.where(np.logical_and(dimension >= low_bound, dimension <= upper_bound)))
 	return slice(slice_idx_list[0], slice_idx_list[-1]+1)

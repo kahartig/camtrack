@@ -66,6 +66,22 @@ def test_slice_good_timeslice():
     sliced_time = NC_SAMPLE_FILE.variables['time'][time_slice].data
     assert_array_equal(expected_timelist, sliced_time)
 
+def test_slice_reset_lower():
+    bad_lowbound = -90
+    good_upperbound = 85
+    expected_lat = [80.52631579, 82.42105263, 84.31578947]
+    lat_slice = slice_from_bounds(NC_SAMPLE_FILE, 'lat', bad_lowbound, good_upperbound, allow_reset=True)
+    sliced_lat = NC_SAMPLE_FILE.variables['lat'][lat_slice].data
+    assert_allclose(sliced_lat, expected_lat)
+
+def test_slice_reset_upper():
+    good_lowbound = 85
+    bad_upperbound = 100
+    expected_lat = [86.21052632, 88.10526316, 90.]
+    lat_slice = slice_from_bounds(NC_SAMPLE_FILE, 'lat', good_lowbound, bad_upperbound, allow_reset=True)
+    sliced_lat = NC_SAMPLE_FILE.variables['lat'][lat_slice].data
+    assert_allclose(sliced_lat, expected_lat)
+    
 # tests for subset_timelatlon:
 def test_subset_corners():
     var_key = 'PS'

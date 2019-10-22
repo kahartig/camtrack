@@ -1,1 +1,1 @@
-from .identify_cold_events import subset_by_timelatlon, find_overall_cold_events, print_CONTROL_files
+from .identify_cold_events import subset_by_timelatlon, slice_from_bounds, find_overall_cold_events, print_CONTROL_files
