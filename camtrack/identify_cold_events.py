@@ -231,10 +231,10 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 	sorted_idx = np.unravel_index(t2m_on_land.argsort(axis=None), t2m_on_land.shape)
 
 	# Initialize DataFrame of cold events
-	cold_events = pd.DataFrame(index=range(number_of_events), columns=['winter index', 'time index', 'time', 'lat index', 'lat', 'lon index', 'lon', '2m temp'])
+	cold_events = pd.DataFrame(index=range(number_of_events), columns=['winter index', 'time', 'lat', 'lon', '2m temp'])
 
 	# Store first (coldest) event
-	cold_events.loc[0] = [winter_idx, sorted_idx[0][0], times[sorted_idx[0][0]], sorted_idx[1][0], latitudes[sorted_idx[1][0]], sorted_idx[2][0], longitudes[sorted_idx[2][0]], t2m_on_land[sorted_idx[0][0], sorted_idx[1][0], sorted_idx[2][0]]]
+	cold_events.loc[0] = [winter_idx, times[sorted_idx[0][0]], latitudes[sorted_idx[1][0]], longitudes[sorted_idx[2][0]], t2m_on_land[sorted_idx[0][0], sorted_idx[1][0], sorted_idx[2][0]]]
 
 	# Find distinct cold events, starting with second-coldest
 	idx = 1
