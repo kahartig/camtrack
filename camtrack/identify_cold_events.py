@@ -199,11 +199,8 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 		index: integer; 0 for coldest event, 1 for second-coldest, etc.
 		columns:
 			'winter index': winter_idx
-			'time index': index of data_dict['time'] corresponding to event
 			'time': time of event in days since 0001-01-01 on 'noleap' calendar
-			'lat index': index of data_dict['lat'] corresponding to event
 			'lat': latitude of event in degrees on -90 to 90 scale
-			'lon index': index of data_dict['lon'] corresponding to event
 			'lon': longitude of event in degrees on 0 to 360 scale
 			'2m temp': temperature (in K) at 2 meters of the event 
 	"""
@@ -247,11 +244,8 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 				distinct = False
 		if distinct:
 			cold_events.loc[num_found]['winter index'] = winter_idx
-			cold_events.loc[num_found]['time index'] = time_idx
 			cold_events.loc[num_found]['time'] = time
-			cold_events.loc[num_found]['lat index'] = lat_idx
 			cold_events.loc[num_found]['lat'] = lat
-			cold_events.loc[num_found]['lon index'] = lon_idx
 			cold_events.loc[num_found]['lon'] = lon
 			cold_events.loc[num_found]['2m temp'] = t2m_on_land[time_idx, lat_idx, lon_idx]
 			num_found = num_found + 1
