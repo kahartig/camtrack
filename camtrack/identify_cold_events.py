@@ -268,7 +268,6 @@ def find_overall_cold_events(data_dict, winter_idx, number_of_events, distinct_c
 	return cold_events
 
 
-
 def print_CONTROL_files(events, traj_heights, backtrack_time, output_dir, traj_dir, data_file_path):
 	"""
 	Generate the CONTROL files that HYSPLIT uses to set up a backtracking run

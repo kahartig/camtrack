@@ -27,7 +27,6 @@ T2M_LAST_LAND_VALUE = 240.78333 # value of 'TREFHT' for time=2895., lat=82.4, lo
 GRIDPOINTS_ON_LAND = 4  # number of gridpoints with landfraction >= 90 for a single timestep in lat=(82.4-90), lon=(322.5, 330)
 LENGTH_OF_TIMES_DIMENSION = 49
 COLDEST_LAND_TEMPERATURE = 236.67903 # using np.nanmin(temperature masked by landfraction)
-TMIN_INDICES = [22, 1, 1]  # indices of time, lat, lon corresponding to COLDEST_LAND_TEMPERATURE
 THIRD_COLDEST_LAND_TEMPERATURE = 236.76225
 FOURTH_COLDEST_LAND_TEMPERATURE = 236.81648
 
@@ -116,10 +115,8 @@ def test_find_coldest():
     data_dict = subset_by_timelatlon(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', -np.inf, (-np.inf, np.inf), testing=True)
     null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
     cold_events = find_overall_cold_events(data_dict, WINTER_IDX, 1, null_distinct)
-    indices_tuple = (cold_events.loc[0, 'time index'], cold_events.loc[0, 'lat index'], cold_events.loc[0, 'lon index'])
-    assert_allclose(cold_events.shape, (1, 8))
+    assert_allclose(cold_events.shape, (1, 5))
     assert_allclose(cold_events['2m temp'][0], COLDEST_LAND_TEMPERATURE)
-    assert_allclose(indices_tuple, TMIN_INDICES)
 
 def test_find_distinct_in_time():
     # mark coldest two as indistinct using time separation
