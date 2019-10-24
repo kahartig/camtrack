@@ -10,7 +10,7 @@ import numpy as np
 from numpy.testing import assert_raises, assert_allclose
 
 # camtrack imports
-from camtrack.climatology import compare_to_climatology
+from camtrack.climatology import compare_to_climatology, sort_and_find_coldest
 
 # Make simple "data" dictionaries to work as inputs
 SAMPLE_DATA = np.array([ [[2, 0], [0, 2]], [[1, 1], [1, 1]] ])
@@ -19,6 +19,12 @@ SAMPLE_DICT_1 = {'data': SAMPLE_DATA, 'time': [0, 1], 'lat': [0.5, 1.5], 'lon': 
 SAMPLE_DICT_2 = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
 BAD_LAT_DICT = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5, 2.0], 'lon': [0.5, 1.5]}
 BAD_LON_DICT = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5, 2.0]}
+
+# Make simple climatology dictionaries (like output of compare_to_climatology)
+# Make sample climatology dict
+SAMPLE_TEMP_ANOMALY = np.array([ [[5, 4], [3, 2]], [[-5, -4], [-3, np.nan]] ])
+COORDS_COLDEST_TEMP_ANOMALY = (1, 0.5, 0.5) # in the order (time, lat, lon)
+SAMPLE_CLIMATOLOGY_DICT = {'diff': SAMPLE_TEMP_ANOMALY, 'time': [0, 1], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
 
 # Absolute method: value - mean
 def test_absolute_method():
@@ -59,3 +65,11 @@ def test_invalid_method():
     bad_method = 'null'
     dict_list = [SAMPLE_DICT_1, SAMPLE_DICT_2]
     assert_raises(ValueError, compare_to_climatology, dict_list, bad_method)
+
+# tests for sort_and_find_coldest
+def test_sort_find_coldest():
+    null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
+    cold_events = sort_and_find_coldest(SAMPLE_CLIMATOLOGY_DICT, 1, null_distinct)
+    assert_allclose(cold_events.shape, (1, 5))
+    assert_allclose(cold_events['temp anomaly'][0], np.nanmin(SAMPLE_TEMP_ANOMALY))
+    assert_allclose((cold_events['time'][0], cold_events['lat'][0], cold_events['lon'][0]), COORDS_COLDEST_TEMP_ANOMALY)
