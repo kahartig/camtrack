@@ -50,7 +50,7 @@ IN_FILE_H3_1=${IN_DIR}/pi_3h.cam.h3.00${YR1}-01-01-10800.nc
 IN_FILE_H3_2=${IN_DIR}/pi_3h.cam.h3.00${YR2}-01-01-10800.nc
 IN_FILE_H4_1=${IN_DIR}/pi_3h.cam.h4.00${YR1}-01-01-10800.nc
 IN_FILE_H4_2=${IN_DIR}/pi_3h.cam.h4.00${YR2}-01-01-10800.nc
-OUT_FILE=${OUT_DIR}/pi_3h_${YR1}${YR2}.nc
+OUT_FILE=${OUT_DIR}/pi_3h_${YR1}${YR2}_analysis.nc
 TEMP_FILE_H1=${OUT_DIR}/pi_3h_${YR1}${YR2}_h1only.nc
 TEMP_FILE_H3=${OUT_DIR}/pi_3h_${YR1}${YR2}_h3only.nc
 echo "Input files:"
