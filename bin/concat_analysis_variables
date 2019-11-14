@@ -1,0 +1,86 @@
+#!/bin/bash
+
+# bash script to concatenate Nov-Dec and Jan-Feb CAM4 files along time
+# dimension for variables given at the top of the script
+# USAGE: >>concat_analysis_variables <winter index> <output path>
+#     winter index is 0 for 07-08 winter, 1 for 08-09, etc.
+# if running on Harvard Odyssey, load the following modules first:
+#     gcc/7.1.0-fasrc01
+#     nco/4.7.4-fasrc01
+
+# Define list of variables to save
+VAR_LIST_H1=CLOUD
+VAR_LIST_H3=U,V,Z3,PSL
+VAR_LIST_H4=TS
+echo "Storing variables:"
+echo "    $VAR_LIST_H1 from h1"
+echo "    $VAR_LIST_H3 from h3"
+echo "    $VAR_LIST_H4 from h4"
+
+# Read winter index and output path from command line argument
+# index 0 is 07-08 winter, index 1 is 08-09, etc.
+if [ $# -ne 2 ]; then
+  echo "ERROR: Incorrect number of arguments; must provide winter index and path to output file"
+  echo "Usage: >>concat_winter <winter index> <output path>"
+  echo "    winter index is 0 for 07-08 winter, 1 for 08-09, etc."
+  echo "    Using NCO command-line functions, this script takes Nov-Dec from the first"
+  echo "    year of the winter index and Jan-Feb from the second year and concatenates"
+  echo "    along the time dimension, preserving the variables defined internally by"
+  echo "    VAR_LIST_H3 and VAR_LIST_H4"
+  exit 2
+else
+  WIDX=$1
+  OUT_DIR=$2
+fi
+printf -v YR1 "%02d" $((7+$WIDX))
+printf -v YR2 "%02d" $((8+$WIDX))
+echo "for winter ${YR1}-${YR2}"
+
+# Generate time bound strings for concatenation
+TIME1=("00${YR1}-11-01 00:00:00")  # start Nov 1st
+TIME2=("00${YR2}-03-01 00:00:00")  # end March 1st
+echo "from time $TIME1 to $TIME2"
+echo
+
+# Define file locations and names
+IN_DIR=/n/tzipermanfs2/CAM-output-for-Arctic-air-suppression/PI
+IN_FILE_H1_1=${IN_DIR}/pi_3h.cam.h1.00${YR1}-01-01-10800.nc
+IN_FILE_H1_2=${IN_DIR}/pi_3h.cam.h1.00${YR1}-01-01-10800.nc
+IN_FILE_H3_1=${IN_DIR}/pi_3h.cam.h3.00${YR1}-01-01-10800.nc
+IN_FILE_H3_2=${IN_DIR}/pi_3h.cam.h3.00${YR2}-01-01-10800.nc
+IN_FILE_H4_1=${IN_DIR}/pi_3h.cam.h4.00${YR1}-01-01-10800.nc
+IN_FILE_H4_2=${IN_DIR}/pi_3h.cam.h4.00${YR2}-01-01-10800.nc
+OUT_FILE=${OUT_DIR}/pi_3h_${YR1}${YR2}.nc
+TEMP_FILE_H1=${OUT_DIR}/pi_3h_${YR1}${YR2}_h1only.nc
+TEMP_FILE_H3=${OUT_DIR}/pi_3h_${YR1}${YR2}_h3only.nc
+echo "Input files:"
+echo "    " $IN_FILE_H1_1
+echo "    " $IN_FILE_H1_2
+echo "    " $IN_FILE_H3_1
+echo "    " $IN_FILE_H3_2
+echo "    " $IN_FILE_H4_1
+echo "    " $IN_FILE_H4_2
+echo
+echo "Output file:"
+echo "    " $OUT_FILE
+echo
+
+# If output files already exist, delete them
+rm -f $OUT_FILE
+rm -f $TEMP_FILE_H1
+rm -f $TEMP_FILE_H3
+
+# Use ncrcat to concatenate files across desired times and variables
+echo "Concatenating h1 variables..."
+ncrcat -d time,"${TIME1[@]}","${TIME2[@]}" -v $VAR_LIST_H1 $IN_FILE_H1_1 $IN_FILE_H1_2 $TEMP_FILE_H1
+echo "Concatenating h3 variables..."
+ncrcat -d time,"${TIME1[@]}","${TIME2[@]}" -v $VAR_LIST_H3 $IN_FILE_H3_1 $IN_FILE_H3_2 $TEMP_FILE_H3
+echo "Concatenating h4 variables..."
+ncrcat -d time,"${TIME1[@]}","${TIME2[@]}" -v $VAR_LIST_H4 $IN_FILE_H4_1 $IN_FILE_H4_2 $OUT_FILE
+echo "Combining h1 and h3 files..."
+ncks -A $TEMP_FILE_H1 $TEMP_FILE_H3
+echo "Combining h1, h3, and h4 files..."
+ncks -A $TEMP_FILE_H3 $OUT_FILE
+rm $TEMP_FILE_H1
+rm $TEMP_FILE_H3
+echo "Finished"
