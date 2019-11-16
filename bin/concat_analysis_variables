@@ -45,7 +45,7 @@ echo
 # Define file locations and names
 IN_DIR=/n/tzipermanfs2/CAM-output-for-Arctic-air-suppression/PI
 IN_FILE_H1_1=${IN_DIR}/pi_3h.cam.h1.00${YR1}-01-01-10800.nc
-IN_FILE_H1_2=${IN_DIR}/pi_3h.cam.h1.00${YR1}-01-01-10800.nc
+IN_FILE_H1_2=${IN_DIR}/pi_3h.cam.h1.00${YR2}-01-01-10800.nc
 IN_FILE_H3_1=${IN_DIR}/pi_3h.cam.h3.00${YR1}-01-01-10800.nc
 IN_FILE_H3_2=${IN_DIR}/pi_3h.cam.h3.00${YR2}-01-01-10800.nc
 IN_FILE_H4_1=${IN_DIR}/pi_3h.cam.h4.00${YR1}-01-01-10800.nc
