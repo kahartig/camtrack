@@ -9,9 +9,9 @@
 #     nco/4.7.4-fasrc01
 
 # Define list of variables to save
-VAR_LIST_H1=CLOUD
+VAR_LIST_H1=CLDLOW,CLDHGH,CLDTOT
 VAR_LIST_H3=U,V,Z3,PSL
-VAR_LIST_H4=TS
+VAR_LIST_H4=TS,TREFHT
 echo "Storing variables:"
 echo "    $VAR_LIST_H1 from h1"
 echo "    $VAR_LIST_H3 from h3"
