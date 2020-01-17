@@ -40,7 +40,7 @@ def compare_to_climatology(data_dict_list, method):
 
 	# make dictionary to hold difference array and dimensions
 	time_all_winters = np.concatenate([d['time'] for d in data_dict_list])
-	diff_dict = {'diff': difference, 'time': time_all_winters, 'lat': latitudes, 'lon': longitudes}
+	diff_dict = {'diff': difference, 'mean': mean_all_winters, 'time': time_all_winters, 'lat': latitudes, 'lon': longitudes}
 	return diff_dict
 
 
