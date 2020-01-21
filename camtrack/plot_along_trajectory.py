@@ -1,14 +1,15 @@
-################################################################################
-# Plots various climate variables along air parcel trajectories
+# ##############################################################################
+# Plot various climate variables along air parcel trajectories
 # Authors: Kara Hartig
 #     based on code by Naomi Wharton
-################################################################################
+# ##############################################################################
 
 # Standard imports
 import numpy as np
 from netCDF4 import Dataset
 import matplotlib.pyplot as plt
-import xarray as xr
+#import xarray as xr
+import pandas as pd
 import math
 import sys
 
@@ -33,32 +34,123 @@ from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from numpy import nanmean
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-class DataFromTrajectoryFile(object):
-    '''
-    Class for storage of all data read in from a .traj file, an ASCII file
+class DataFromTrajectoryFile:
+	'''
+	Class for storage of all data read in from a .traj file, an ASCII file
     output from HYSPLIT. These .traj files contain lat/lon locations of
-    an air mass every hour along a trajectory. 
-    '''
-    def __init__(self, *args):
+    an air mass every hour along a trajectory.
 
-        # list of meteorological grids used in the trajectory calculation
-        self.list_of_grids = args[0]
+    init Input Parameters
+    ----------
+    filepath: string
+        path to .traj file
 
-        # list of all trajectories in the file
-        self.list_of_trajectories = args[1]
+    Attributes
+    ----------
+    grids: dictionary
+        contains information for all grids used: model, year, month, day, hour,
+        and fhour
+    traj_start: dictionary
+    	contains initialization information for all trajectories: date, time,
+    	and location at which trajectory was started
+    diag_var_names: list
+    	list of names of diagnostic output variables. Corresponding values are
+    	presented in the trailing columns of the .traj files, following the
+    	current height
+    number_of_trajectories: int
+    	number of distinct trajectories stored in .traj file
+    direction: string
+    	direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
+    data: dictionary
+    	trajectory data
+    	columns: traj #, grid #, year, month, day, hour, minute, fhour,
+    	         traj age, lat, lon, height (m)
+	'''
+	def __init__(self, filepath):
+		# open the .traj file
+		file = open(filepath, 'r')
 
-        # number of different trajectories in the file
-        self.number_of_trajectories = args[2]
+		# Header 1
+		#    number of meteorological grids used
+		header_1 = file.readline()
+		header_1 = (header_1.strip()).split()
+		ngrids = int(header_1[0])
+		# read in list of grids used
+		# columns: model, year, month, day, hour, forecast_hour
+		h1_columns = ['model', 'year', 'month', 'day', 'hour', 'fhour']
+		
+		# loop over each grid
+		grids_list = []
+		for i in range(ngrids):
+			line = file.readline().strip().split()
+			grids_list.append(line)
+		self.grids = pd.DataFrame(grids_list, columns=h1_columns)
 
-        # string containing direction of trajectory calculation 
-        #   "FORWARD" or "BACKWARD"
-        self.direction = args[3]
+		# Header 2
+		#    col 0: number of different trajectories in file
+		#    col 1: direction of trajectory calculation (FORWARD, BACKWARD)
+		#    col 2: vertical motion calculation method (OMEGA, THETA, ...)
+		header_2 = file.readline()
+		header_2 = (header_2.strip()).split()
+		ntraj = int(header_2[0])          # number of trajectories
+		direction = header_2[1]           # direction of trajectories
+		vert_motion = header_2[2]         # vertical motion calculation method
+		self.number_of_trajectories = ntraj
+		self.direction = direction
 
-        # rows of data from all of the trajectories in the file
-        # data columns: trajectory number, grid number, year, month, 
-        #               day, hour, forecast hour, age, latitude, 
-        #               longitude, height, + any additional provided
-        self.data = args[4]
+		# read in list of trajectories
+		# columns: year, month, day, hour, lat, lon, height
+		h2_columns = ['year', 'month', 'day', 'hour', 'lat', 'lon', 'height']
+
+		# loop over each trajectory
+		traj_start_list = []
+		for i in range(ntraj):
+			line = file.readline().strip().split()
+			traj_start_list.append(line)
+		self.traj_start = pd.DataFrame(traj_start_list, columns=h2_columns)
+
+		# Header 3
+		#    col 0 - number (n) of diagnostic output variables
+		#    col 1+ - label identification of each of n variables (PRESSURE, THETA, ...)
+		header_3 = file.readline()
+		header_3 = header_3.strip().split()
+		nvars = int(header_3[0]) # number of diagnostic variables
+		self.diag_var_names = header_3[1:]
+
+		file.close()
+
+		# Trajectories
+		#    0 - trajectory number
+		#    1 - grid number
+		#    2 - year [calendar date, year part only]
+		#    3 - month [calendar date, month part only]
+		#    4 - day [calendar date, day part only]
+		#    5 - hour [calendar time, hour part only]
+		#    6 - minute [calendar time, minute part only]
+		#    7 - forecast hour [if .arl file had times appended one-by-one, this will always be 0]
+		#    8 - age [hours since start of trajectory; negative for backwards trajectory] 
+		#    9 - lats 
+		#    10 - lons
+		#    11 - height
+		#    ... and then any additional diagnostic output variables
+		traj_columns = ['traj #', 'grid #', 'year', 'month', 'day', 'hour', 'minute', 'fhour', 'traj age', 'lat', 'lon', 'height (m)']
+		for var in diag_output_vars:
+			traj_columns.append(var)
+		traj_dtypes = {'traj #': int, 'grid #': int, 'year': int, 'month': int, 'day': int, 'hour': int, 'minute': int, 'fhour': int, 'traj age': int, 'lat': float, 'lon': float, 'height (m)': float}
+		traj_skiprow = 1 + ngrids + 1 + ntraj + 1  # skip over header; length depends on number of grids and trajectories
+
+		# read in file as csv
+		trajectories = pd.read_csv(path, delim_whitespace=True, header=None, names=traj_columns, index_col=[0,8], dtype=traj_dtypes, skiprows=traj_skiprow)
+		trajectories.sort_index(inplace=True)
+		print('Starting position for trajectory {}:'.format(trajectory_number))
+		print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
+		# construct datetime string
+		# for whatever reason, specific values pulled from trajectories register as floats rather than int...
+		def traj_datetime(row):
+			return '00{:02.0f}-{:02.0f}-{:02.0f} {:02.0f}:{:02.0f}:00'.format(row['year'], row['month'], row['day'], row['hour'], row['minute'])
+		trajectories['datetime'] = trajectories.apply(traj_datetime, axis=1)
+		self.data = trajectories
+
 
 class SingleTrajectory(object):
     '''
@@ -127,157 +219,6 @@ class DataForPlotting(object):
 
         # dict containing units of each variable as given in the netcdf file
         self.variable_units = args[19]
-
-##########################################################################
-def read_in_trajectory_file(trajectory_filepath):
-##########################################################################
-    '''
-    Read in data from a .traj file and store it.
-
-    Parameters:
-    trajectory_filepath: a string containing the path to a .traj file
-
-    Output: 
-    a DataFromTrajectoryFile() object containing all data from the .traj
-    file
-
-    '''
-
-    # open the .traj file
-    file = open(trajectory_filepath, 'r')
-
-    # ------------------------------------------------------------
-    # Trajectory file HEADER 1: 
-    # Number of meteorological grids used in calculation
-    # ------------------------------------------------------------
-    # read first line
-    header_1 = file.readline()
-
-    # turn line of text into list
-    header_1 = (header_1.strip()).split()   
-    
-    # number of grids
-    ngrids = int(header_1[0])         
-
-    # read in list of grids used
-    # columns: model, year, month, day, hour, forecast_hour
-    grids = np.array([], dtype=[('model','U10'),
-                                ('year',int),
-                                ('month',int),
-                                ('day',int),
-                                ('hour',int),
-                                ('fhour',int)])
-
-    # store information for each grid
-    for grid in range(ngrids): 
-        
-        # turn line of text into list
-        line = file.readline().strip().split()
-        
-        # store as np array
-        line = np.array([tuple(line)], dtype=grids.dtype)
-        
-        # add to list of all grids
-        grids = np.append(grids, line)
-
-    # ------------------------------------------------------------
-    # Trajectory file HEADER 2: 
-    # col 0 - number of different trajectories in file
-    # col 1 - direction of trajectory calculation (FORWARD, BACKWARD) 
-    # col 2 - vertical motion calculation method (OMEGA, THETA, ...)  
-    # ------------------------------------------------------------
-
-    # read first line of header
-    header_2 = file.readline()
-
-    # turn line of text into list
-    header_2 = (header_2.strip()).split()
-
-    # number of trajectories
-    ntraj = int(header_2[0])          
-    
-    # col 1 gives the direction of all trajectores
-    direction = header_2[1]
-    
-    # col 2 gives the vertical motion calculation method
-    vert_motion = header_2[2]
-
-    # read in list of trajectories
-    # columns: year, month, day, hour, lat, lon, height
-    traj_list = np.array([], dtype=[('year',int),
-                                        ('month',int),
-                                        ('day',int),
-                                        ('hour',int),
-                                        ('lat',float),
-                                        ('lon',float),
-                                        ('height',float)])
-
-    # store list of trajectories in a np array
-    for i in range(ntraj):
-
-            # turn line of text into list
-            line = file.readline().strip().split()
-
-            # store as np array
-            line = np.array([tuple(line)], dtype=traj_list.dtype)
-
-            # add to list of all trajectories
-            traj_list = np.append(traj_list, line)
-
-    # ------------------------------------------------------------
-    # Trajectory file HEADER 3: 
-    # col 0 - number (n) of diagnostic output variables
-    # col 1... - label identification of additional n 
-    #             variables (PRESSURE, THETA, ...)
-    # ------------------------------------------------------------
-    
-    # read first line of header
-    header_3 = file.readline()
-
-    # turn line of text into list
-    header_3 = header_3.strip().split()
-    
-    # this is the number of additional columns of trajectory data
-    nvars = int(header_3[0])
-
-    # ------------------------------------------------------------
-    # Read in actual trajectory data:
-    #
-    # data columns:
-    # 0  -  trajectory number 
-    # 1  -  grid number
-    # 2  -  year
-    # 3  -  month 
-    # 4  -  day
-    # 5  -  hour 
-    # 6  -  forecast hour 
-    # 7  -  age 
-    # 8  -  lat 
-    # 9  -  lon 
-    # 10 -  height
-    # ... and then any additional diagnostic output variables
-    # ------------------------------------------------------------
-
-    # array to store all trajectory data
-    data = []
-
-    # read in data to array
-    for line in file:
-
-        # store line of text as list
-        line = line.strip().split()
-
-        # add to data array
-        data.append([float(i) for i in line])
-
-    # turn stored data into a np array
-    data = np.array(data)
-
-    # close trajectory file
-    file.close()
-
-    # return object with all data
-    return DataFromTrajectoryFile(grids, traj_list, ntraj, direction, data)
 
 ##########################################################################
 def select_trajectory(trajectory_number, all_trajectories):
