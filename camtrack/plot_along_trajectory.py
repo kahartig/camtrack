@@ -78,13 +78,15 @@ class DataFromTrajectoryFile:
 		# read in list of grids used
 		# columns: model, year, month, day, hour, forecast_hour
 		h1_columns = ['model', 'year', 'month', 'day', 'hour', 'fhour']
+		h1_dtypes = ['str', 'int32', 'int32', 'int32', 'int32', 'int32']
 		
 		# loop over each grid
 		grids_list = []
 		for i in range(ngrids):
 			line = file.readline().strip().split()
 			grids_list.append(line)
-		self.grids = pd.DataFrame(grids_list, columns=h1_columns)
+		grids_df = pd.DataFrame(grids_list, columns=h1_columns)
+		self.grids = grids_df.astype(dict(zip(h1_columns, h1_dtypes)))
 
 		# Header 2
 		#    col 0: number of different trajectories in file
@@ -101,13 +103,15 @@ class DataFromTrajectoryFile:
 		# read in list of trajectories
 		# columns: year, month, day, hour, lat, lon, height
 		h2_columns = ['year', 'month', 'day', 'hour', 'lat', 'lon', 'height']
+		h2_dtypes = ['int32', 'int32', 'int32', 'int32', 'float32', 'float32', 'float32']
 
 		# loop over each trajectory
 		traj_start_list = []
 		for i in range(ntraj):
 			line = file.readline().strip().split()
 			traj_start_list.append(line)
-		self.traj_start = pd.DataFrame(traj_start_list, columns=h2_columns)
+		traj_df = pd.DataFrame(traj_start_list, columns=h2_columns)
+		self.traj_start = traj_df.astype(dict(zip(h2_columns, h2_dtypes)))
 
 		# Header 3
 		#    col 0 - number (n) of diagnostic output variables
@@ -134,18 +138,18 @@ class DataFromTrajectoryFile:
 		#    11 - height
 		#    ... and then any additional diagnostic output variables
 		traj_columns = ['traj #', 'grid #', 'year', 'month', 'day', 'hour', 'minute', 'fhour', 'traj age', 'lat', 'lon', 'height (m)']
-		for var in diag_output_vars:
+		for var in self.diag_var_names:
 			traj_columns.append(var)
 		traj_dtypes = {'traj #': int, 'grid #': int, 'year': int, 'month': int, 'day': int, 'hour': int, 'minute': int, 'fhour': int, 'traj age': int, 'lat': float, 'lon': float, 'height (m)': float}
 		traj_skiprow = 1 + ngrids + 1 + ntraj + 1  # skip over header; length depends on number of grids and trajectories
 
 		# read in file as csv
-		trajectories = pd.read_csv(path, delim_whitespace=True, header=None, names=traj_columns, index_col=[0,8], dtype=traj_dtypes, skiprows=traj_skiprow)
+		trajectories = pd.read_csv(filepath, delim_whitespace=True, header=None, names=traj_columns, index_col=[0,8], dtype=traj_dtypes, skiprows=traj_skiprow)
 		trajectories.sort_index(inplace=True)
-		print('Starting position for trajectory {}:'.format(trajectory_number))
-		print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
+		#print('Starting position for trajectory {}:'.format(trajectory_number))
+		#print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
+		
 		# construct datetime string
-		# for whatever reason, specific values pulled from trajectories register as floats rather than int...
 		def traj_datetime(row):
 			return '00{:02.0f}-{:02.0f}-{:02.0f} {:02.0f}:{:02.0f}:00'.format(row['year'], row['month'], row['day'], row['hour'], row['minute'])
 		trajectories['datetime'] = trajectories.apply(traj_datetime, axis=1)
@@ -1045,28 +1049,3 @@ def make_plots(plotting_data, trajectory):
 
 
         plt.close()
-
-
-# path for .traj file
-trajectory_filepath = 'Data/sample_traj.traj'
-
-
-# read in all data from the .traj file and store it
-all_trajectories_from_traj_file = read_in_trajectory_file(trajectory_filepath)
-
-# number of desired trajectory within the .traj file
-trajectory_number = 1
-
-# lat/lon data for a single trajectory
-single_trajectory = select_trajectory(trajectory_number, 
-                                        all_trajectories_from_traj_file)
-
-# pull out values of various quantities along the lat/lon/time path 
-# of the desired trajectory
-data_ready_for_plotting = read_netcdf_files(single_trajectory, 
-                                            trajectory_number, 
-                                            all_trajectories_from_traj_file)
-
-# plot data for a single trajectory
-# produces contour plots, line plots, and a map of overall lat/lon trajectory
-make_plots(data_ready_for_plotting, single_trajectory)

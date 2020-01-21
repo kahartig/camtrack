@@ -20,10 +20,15 @@ SAMPLE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sam
 SAMPLE_TRAJ = DataFromTrajectoryFile(SAMPLE_FILE_PATH)
 SAMPLE_GRIDS_NGRIDS = 1
 SAMPLE_GRIDS_MODEL = 'CAM4'
-SAMPLE_TRAJ1_START_LON = -72.5  # starting longitude of trajectory 1 in sample file
-SAMPLE_DIAG_NAMES = ['PRESSURE']
 SAMPLE_NTRAJ = 2
-SAMPLE_DIRECTION = 'BACKWARD'
+SAMPLE_TRAJ1_START_HEIGHT = 10.0  # starting longitude of trajectory 1 in sample file
+#SAMPLE_DIAG_NAMES = ['PRESSURE']
+#SAMPLE_DIRECTION = 'BACKWARD'
+
+# Some data points from sample trajectory file
+SAMPLE_TRAJ1_PRESSURE1 = 996.8  # 1st listed pressure for traj 1
+SAMPLE_TRAJ2_HEIGHT3 = 502.2  # 3rd listed height for traj 2
+SAMPLE_TRAJ2_LAT4 = 64.533  # 4th listed latitude for traj 2
 
 # Check reading of headers
 def test_grid_header():
@@ -31,10 +36,11 @@ def test_grid_header():
     assert_equal(SAMPLE_TRAJ.grids.iloc[0]['model'], SAMPLE_GRIDS_MODEL)
 
 def test_traj_start():
-    assert_equal(SAMPLE_TRAJ.traj_start.iloc[0]['lon'], SAMPLE_TRAJ1_START_LON)
+    assert_equal(SAMPLE_TRAJ.traj_start.iloc[0]['height'], SAMPLE_TRAJ1_START_HEIGHT)
     assert_equal(len(SAMPLE_TRAJ.traj_start.index), SAMPLE_NTRAJ)
 
-def test_misc_headers():
-    assert_allclose(SAMPLE_TRAJ.diag_var_names, SAMPLE_DIAG_NAMES)
-    assert_equal(SAMPLE_TRAJ.direction, SAMPLE_DIRECTION)
+def test_traj_data():
+    assert_equal(SAMPLE_TRAJ.data.loc[1, 0.0]['PRESSURE'], SAMPLE_TRAJ1_PRESSURE1)
+    assert_equal(SAMPLE_TRAJ.data.loc[2, -2.0]['height (m)'], SAMPLE_TRAJ2_HEIGHT3)
+    assert_equal(SAMPLE_TRAJ.data.loc[2, -3.0]['lat'], SAMPLE_TRAJ2_LAT4)
     
