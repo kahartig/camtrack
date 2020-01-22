@@ -1,0 +1,56 @@
+#!/bin/bash
+
+# bash script to concatenate Nov-Dec and Jan-Feb portions of CAM4 files along
+# time dimension
+
+# Read output path from command line argument
+if [ $# -ne 3 ]; then
+  echo "ERROR: Incorrect number of arguments; must provide start year, end"
+  echo "       year, and path to output file"
+  echo
+  echo "Usage: >>concat_all_winters <start year YY> <end year YY> <output path>"
+  echo "    Using NCO command-line functions, this script takes Nov-Dec and"
+  echo "    Jan-Feb from consecutive years between start year and end year and"
+  echo "    concatenates along the time dimension to form 'winter' files"
+  exit 2
+else
+  START_YEAR=$1
+  END_YEAR=$2
+  OUT_DIR=$3
+fi
+
+echo "Generating winter files, starting with $((START_YEAR))-$((START_YEAR+1))"
+echo "                       and ending with $((END_YEAR-1))-$((END_YEAR+1))"
+
+# Loop over all years
+for ((YR1 = $START_YEAR ; YR1 < $END_YEAR ; YR1++)); do
+	YR2=$((YR1 + 1))
+	echo "Starting winter $YR1-$YR2..."
+
+	TIME1=("00${YR1}-11-01 00:00:00")  # start Nov 1st
+	TIME2=("00${YR2}-03-01 00:00:00")  # end March 1st
+
+	# Input file directory
+#	IN_DIR=/n/tzipermanfs2/CAM-output-for-Arctic-air-suppression/PI
+	IN_DIR=/Users/karahartig/Documents/
+	for HNUM in {1..4}; do
+#		echo "  Concatenating h${HNUM} variables..."
+		# Define file locations and names
+		IN_FILE_1=${IN_DIR}/pi_3h.cam.h${HNUM}.00${YR1}-01-01-10800.nc
+		IN_FILE_2=${IN_DIR}/pi_3h.cam.h${HNUM}.00${YR2}-01-01-10800.nc
+		OUT_FILE=${OUT_DIR}/pi_3h_${YR1}${YR2}_h${HNUM}.nc
+		echo "    Input files:"
+		echo "      " $IN_FILE_1
+		echo "      " $IN_FILE_2
+		echo "    Output file:"
+		echo "      " $OUT_FILE
+		echo
+
+		# If output file already exists, delete
+#		rm -f $OUT_FILE
+
+		# Create winter file by combining Nov-Dec and Jan-Feb parts
+#		ncrcat -d time,"${TIME1[@]}","${TIME2[@]}" $IN_FILE_1 $IN_FILE_2 $OUT_FILE
+	done
+	echo "Finished with winter $YR1-$YR2"
+done
