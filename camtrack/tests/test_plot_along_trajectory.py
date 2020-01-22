@@ -12,12 +12,12 @@ import os
 from numpy.testing import assert_equal, assert_raises, assert_allclose
 
 # camtrack imports
-from camtrack.plot_along_trajectory import DataFromTrajectoryFile
+from camtrack.plot_along_trajectory import TrajectoryFile
 
 # File path of sample .traj file
 #    based on HYSPLIT trajectory for Jan 8, year 9 at lat 65.4, lon -72.5
 SAMPLE_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample_traj.traj')
-SAMPLE_TRAJ = DataFromTrajectoryFile(SAMPLE_FILE_PATH)
+SAMPLE_TRAJ = TrajectoryFile(SAMPLE_FILE_PATH)
 SAMPLE_GRIDS_NGRIDS = 1
 SAMPLE_GRIDS_MODEL = 'CAM4'
 SAMPLE_NTRAJ = 2
@@ -40,7 +40,7 @@ def test_traj_start():
     assert_equal(len(SAMPLE_TRAJ.traj_start.index), SAMPLE_NTRAJ)
 
 def test_traj_data():
-    assert_equal(SAMPLE_TRAJ.data.loc[1, 0.0]['PRESSURE'], SAMPLE_TRAJ1_PRESSURE1)
-    assert_equal(SAMPLE_TRAJ.data.loc[2, -2.0]['height (m)'], SAMPLE_TRAJ2_HEIGHT3)
-    assert_equal(SAMPLE_TRAJ.data.loc[2, -3.0]['lat'], SAMPLE_TRAJ2_LAT4)
+    assert_equal(SAMPLE_TRAJ.data.loc[1, 0]['PRESSURE'], SAMPLE_TRAJ1_PRESSURE1)
+    assert_equal(SAMPLE_TRAJ.data.loc[2, -2]['height (m)'], SAMPLE_TRAJ2_HEIGHT3)
+    assert_equal(SAMPLE_TRAJ.data.loc[2, -3]['lat'], SAMPLE_TRAJ2_LAT4)
     
