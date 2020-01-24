@@ -14,7 +14,7 @@ import os
 from numpy.testing import assert_equal, assert_raises, assert_allclose
 
 # camtrack imports
-from camtrack.plot_along_trajectory import TrajectoryFile
+from camtrack.plot_along_trajectory import TrajectoryFile, WinterCAM, ClimateAlongTrajectory
 
 # File path of sample .traj file
 #    based on HYSPLIT trajectory for Jan 8, year 9 at lat 65.4, lon -72.5
