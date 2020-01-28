@@ -8,20 +8,21 @@
 
 # Standard imports
 import numpy as np
-from netCDF4 import Dataset    # QUESTION: do I still use this?
+#from netCDF4 import Dataset
 import matplotlib.pyplot as plt
 import xarray as xr
 import pandas as pd
 import os
 import cftime
-import math    # QUESTION: do I still use this?
-import sys    # QUESTION: do I still use this?
+import calendar
+#import math
+#import sys
 
 # Matplotlib imports
 import matplotlib.path as mpath
-from matplotlib.pyplot import figure
+#from matplotlib.pyplot import figure
 from matplotlib.cm import get_cmap
-from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+#from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 
 # Scipy imports
 from scipy.interpolate import griddata
@@ -30,9 +31,9 @@ from scipy.interpolate import RegularGridInterpolator as interpolator
 # Cartopy imports
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-from cartopy.feature import NaturalEarthFeature
-from cartopy import config
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+#from cartopy.feature import NaturalEarthFeature
+#from cartopy import config
+#from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 # Misc imports
 from numpy import nanmean
@@ -77,7 +78,7 @@ class TrajectoryFile:
         columns: grid #, year, month, day, hour, minute, fhour, lat, lon,
             height (m), <any diagnostic variables...>, datetime, cftime date
         note that cftime date is a cftime.DatetimeNoLeap object
-        	useful for indexing netCDF files by time dimension
+                useful for indexing netCDF files by time dimension
     '''
 
     def __init__(self, filepath):
@@ -166,16 +167,25 @@ class TrajectoryFile:
         trajectories = pd.read_csv(filepath, delim_whitespace=True, header=None, names=traj_columns, index_col=[
                                    0, 8], dtype=traj_dtypes, skiprows=traj_skiprow)
         trajectories.sort_index(inplace=True)
-        
-        # construct column with datetime string
+
+        # new column: datetime string
         def traj_datetime(row):
             return '00{:02.0f}-{:02.0f}-{:02.0f} {:02.0f}:{:02.0f}:00'.format(row['year'], row['month'], row['day'], row['hour'], row['minute'])
         trajectories['datetime'] = trajectories.apply(traj_datetime, axis=1)
 
-        # construct column with cftime Datetime objects
+        # new column: cftime Datetime objects
         def traj_cftimedate(row):
-        	return cftime.DatetimeNoLeap(row['year'], row['month'], row['day'], row['hour'], row['minute'])
-        trajectories['cftime date'] = trajectories.apply(traj_cftimedate, axis=1)
+            return cftime.DatetimeNoLeap(row['year'], row['month'], row['day'], row['hour'], row['minute'])
+        trajectories['cftime date'] = trajectories.apply(
+            traj_cftimedate, axis=1)
+
+        # new column: numerical time (days since 0001-01-01 00:00:00)
+        #min_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 1), time_object.units, calendar=time_object.calendar)
+        def traj_numtime(row):
+            return cftime.date2num(row['cftime date'], units='days since 0001-01-01 00:00:00', calendar='noleap')
+        trajectories['numerical time'] = trajectories.apply(
+            traj_numtime, axis=1)
+
         self.data = trajectories
 
     def winter(self, out_format):
@@ -204,7 +214,8 @@ class TrajectoryFile:
         elif out_format == 'firstsecond':
             output = '{:02d}{:02d}'.format(start_year, end_year)
         else:
-            raise ValueError("Invalid out_format {}. Must be 'first' or 'first-second' or 'firstsecond'".format(out_format))
+            raise ValueError(
+                "Invalid out_format {}. Must be 'first' or 'first-second' or 'firstsecond'".format(out_format))
         return output
 
 
@@ -214,20 +225,21 @@ class WinterCAM:
     '''
 
     # Map CAM variable names to h1 through h4 files
-    # QUESTION: should this be pulled from the CAM files themselves? something to consider...
-    name_to_h = dict.fromkeys(['CLDHGH','CLDICE','CLDLIQ','CLDLOW','CLDMED',
-    	'CLDTOT','CLOUD','CONCLD','FICE','ICIMR','ICLDIWP','ICLDTWP','ICWMR',
-    	'Q','QFLX','QREFHT','RELHUM','SFCLDICE','SFCLDLIQ','TGCLDCWP',
-    	'TGCLDIWP','TGCLDLWP','TMQ'], 'h1') 
-    name_to_h.update(dict.fromkeys(['FLDS','FLDSC','FLNS','FLNSC','FLNT',
-    	'FLNTC','FLUT','FLUTC','FSDS','FSDSC','FSDTOA','FSNS','FSNSC','FSNT',
-    	'FSNTC','FSNTOA','FSNTOAC','FSUTOA','LHFLX','LWCF','QRL','QRS','SHFLX',
-    	'SOLIN','SWCF'], 'h2'))
-    name_to_h.update(dict.fromkeys(['OMEGA','OMEGAT','PBLH','PHIS','PRECC',
-    	'PRECL','PRECT','PS','PSL','SNOWHICE','SNOWHLND','TAUX','TAUY','U',
-    	'U10','UU','V','VQ','VT','VU','VV','Z3'], 'h3'))
-    name_to_h.update(dict.fromkeys(['ICEFRAC','LANDFRAC','OCNFRAC','T', 'T200',
-    	'T500','T850','TREFHT','TREFHTMN','TREFHTMX','TS','TSMN','TSMX'], 'h4'))
+    # QUESTION: should this be pulled from the CAM files themselves? something
+    # to consider...
+    name_to_h = dict.fromkeys(['CLDHGH', 'CLDICE', 'CLDLIQ', 'CLDLOW', 'CLDMED',
+                               'CLDTOT', 'CLOUD', 'CONCLD', 'FICE', 'ICIMR', 'ICLDIWP', 'ICLDTWP', 'ICWMR',
+                               'Q', 'QFLX', 'QREFHT', 'RELHUM', 'SFCLDICE', 'SFCLDLIQ', 'TGCLDCWP',
+                               'TGCLDIWP', 'TGCLDLWP', 'TMQ'], 'h1')
+    name_to_h.update(dict.fromkeys(['FLDS', 'FLDSC', 'FLNS', 'FLNSC', 'FLNT',
+                                    'FLNTC', 'FLUT', 'FLUTC', 'FSDS', 'FSDSC', 'FSDTOA', 'FSNS', 'FSNSC', 'FSNT',
+                                    'FSNTC', 'FSNTOA', 'FSNTOAC', 'FSUTOA', 'LHFLX', 'LWCF', 'QRL', 'QRS', 'SHFLX',
+                                    'SOLIN', 'SWCF'], 'h2'))
+    name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
+                                    'PRECL', 'PRECT', 'PS', 'PSL', 'SNOWHICE', 'SNOWHLND', 'TAUX', 'TAUY', 'U',
+                                    'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
+    name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
+                                    'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
 
     def __init__(self, file_dir, trajectories, nosetest=False):
         '''
@@ -236,26 +248,31 @@ class WinterCAM:
         trajectories is an instance of TrajectoryFile
             contains a family of trajectories with same start point and time
         assumes all trajectories run over the same time window
-        	takes overall min and max of times listed in trajectories
+                takes overall min and max of times listed in trajectories
         nosetest only True if running nosetests
         '''
         # Open the CAM files with xarray
         if not nosetest:
             winter_str = trajectories.winter(out_format='firstsecond')
-            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h1.nc')
+            nc_file_path = os.path.join(
+                file_dir, 'pi_3h_' + winter_str + '_h1.nc')
             ds1 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h2.nc')
+            nc_file_path = os.path.join(
+                file_dir, 'pi_3h_' + winter_str + '_h2.nc')
             ds2 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h3.nc')
+            nc_file_path = os.path.join(
+                file_dir, 'pi_3h_' + winter_str + '_h3.nc')
             ds3 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h4.nc')
+            nc_file_path = os.path.join(
+                file_dir, 'pi_3h_' + winter_str + '_h4.nc')
             ds4 = xr.open_dataset(nc_file_path)
 
             # Map h1 through h4 to ds1 through ds4
             self.h_to_d = {'h1': d1, 'h2': d2, 'h3': d3, 'h4': d4}
         else:
             # Only activated when running nosetests
-            nc_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tests', 'sample_CAM4_for_nosetests.nc')
+            nc_file_path = os.path.join(os.path.dirname(os.path.abspath(
+                __file__)), 'tests', 'sample_CAM4_for_nosetests.nc')
             ds1 = xr.open_dataset(nc_file_path)
             self.h_to_d = dict.fromkeys(['h1', 'h2', 'h3', 'h4'], ds1)
 
@@ -270,6 +287,7 @@ class ClimateAlongTrajectory:
     '''
     Stores climate variables along given air parcel trajectory
     '''
+
     def __init__(self, winter_file, trajectories, trajectory_number, variables_to_plot):
         '''
         DOC
@@ -281,26 +299,40 @@ class ClimateAlongTrajectory:
         NEAREST NEIGHBOR lat and lon only (for now)
         '''
         # Check that all requested variables exist in CAM files
-        # QUESTION: should this check against the list of actual variables in the CAM file instead of just the h-file mapping?
+        # QUESTION: should this check against the list of actual variables in
+        # the CAM file instead of just the h-file mapping?
         if not all(key in winter_file.name_to_h for key in variables_to_plot):
-            missing_keys = [key for key in variables_to_plot if key not in winter_file.name_to_h]
-            raise ValueError('One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
-        
+            missing_keys = [
+                key for key in variables_to_plot if key not in winter_file.name_to_h]
+            raise ValueError(
+                'One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
+
         # Select a single trajectory
         single_trajectory = trajectories.data.loc[trajectory_number].copy()
+        self.direction = trajectories.direction
         #print('Starting position for trajectory {}:'.format(trajectory_number))
         #print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
 
-        # Extract data every 3 hours
+        # Extract data every 3 hours as default
         #    CAM only provides output in 3-hourly intervals
         is_every3hours = single_trajectory['hour'] % 3 == 0
         self.trajectory = single_trajectory[is_every3hours]
 
+        # Also save every 1, 12, 24 hours for plotting
+        self.trajectory_1h = single_trajectory  # output every 1 hour
+        self.trajectory_12h = single_trajectory[
+            single_trajectory['hour'] % 12 == 0]  # every 12 hours
+        self.trajectory_24h = single_trajectory[
+            single_trajectory['hour'] % 24 == 0]  # every 24 hours
+
         # Convert trajectory lat and lon to DataArrays with dimension 'time'
-        #    using the cftime date as 'time' for direct comparison to CAM 'time' dimension
+        # using the cftime date as 'time' for direct comparison to CAM 'time'
+        # dimension
         time_coord = {'time': self.trajectory['cftime date'].values}
-        traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
-        traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
+        traj_lat = xr.DataArray(
+            self.trajectory['lat'].values, dims=('time'), coords=time_coord)
+        traj_lon = xr.DataArray(
+            self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
         # Map trajectory times to climate variables
         # xarray supports vectorized indexing across multiple dimensions
@@ -312,497 +344,163 @@ class ClimateAlongTrajectory:
             ds = winter_file.h_to_d[winter_file.name_to_h[key]]
             variable = ds[key]
             if (variable.dims == ('time', 'lat', 'lon')) or (variable.dims == ('time', 'lev', 'lat', 'lon')):
-                values = variable.sel(lat=traj_lat, lon=traj_lon, time=traj_lat['time'], method='nearest')
+                values = variable.sel(lat=traj_lat, lon=traj_lon,
+                                      time=traj_lat['time'], method='nearest')
                 list_of_variables.append(values)
             else:
-                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) for line plot or (time, lev, lat, lon) for contour plot'.format(key, variable.dims))
+                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) for line plot or (time, lev, lat, lon) for contour plot'.format(
+                    key, variable.dims))
         self.data = xr.merge(list_of_variables)
 
-
-
-
-def make_plots(plotting_data, trajectory):
-    ##########################################################################
-    '''
-    Plot values of various quantities along the given lat/lon trajectory
-    over time. Produces contour plots, line plots, and a map of the 
-    overall trajectory.
-
-    Parameters: 
-    plotting_data: a DataForPlotting() object containing various
-        quantities along a trajectory that we want to plot
-
-    trajectory: a SingleTrajectory() object containing lat/lon values 
-        along a single trajectory
-
-    Output: 
-    - a PDF containing contour plots along the trajectory of (currently)
-    four variables
-    - a PDF containing line plots along the trajectory of (currently)
-    eleven variables over four plots
-    - a PDF containing a map showing the lat/lon coordinates of the
-    trajectory with the days labeled
-
-    '''
-
-    every3hours = trajectory.indices['every3hours']
-    every24hours = trajectory.indices['every24hours']
-
-    time = plotting_data.time
-
-    # set up time/level grid
-    TIME, LEV = np.meshgrid(plotting_data.time, plotting_data.lev)
-
-    # make date labels for x-axis
-    idays = np.squeeze(np.where(time[:] % 1 == 0))  # indices
-
-    locs = time[idays]  # locations for x-axis labels
-
-    days = plotting_data.stime[idays]  # dates as time objects
-    labels = []
-    for day in days:
-        labels.append(str(day)[0:10].lstrip('0'))
-
-    # mark minor x-axis tick marks every 3 hours
-    minorLocator = MultipleLocator(.125)
-
-    # ------------------------------------------------------------
-    # Contour plots: temperature, specific humidity, relative
-    #                humidity, and cloud cover along trajectory
-    # ------------------------------------------------------------
-    if make_contour_plots:
-
-        # create figure
+    def plot_trajectory_path(self, save_file_path):
+        '''
+        DOC
+        save_file_path: directory path and name for saving file
+            file name suffix will determine saved file format
+        '''
+        # Initialize plot
         plt.clf()
-        fig = plt.figure()
-        fig.set_figheight(12)
-        fig.set_figwidth(11)
+        plt.rcParams.update({'font.size': 14})  # set overall font size
+        plt.title('{} trajectory starting at {:.0f} m'.format(
+            self.direction, self.trajectory.loc[0]['height (m)']), fontsize=24)
+        cm = plt.get_cmap('inferno')  # colormap for trajectory age
 
-        # ------------------------------------------------------------
-        # plot temperature
-        # ------------------------------------------------------------
+        # Set map projection
+        ax = plt.axes(projection=ccrs.NorthPolarStereo())
+        ax.set_global()
+        min_plot_lat = 50 if all(self.trajectory_1h['lat'].values > 50) else min(
+            self.trajectory_1h['lat'].values) - 5
+        ax.set_extent([-180, 180, min_plot_lat, 90], crs=ccrs.PlateCarree())
 
-        # create axes
-        ax = fig.add_subplot(4, 1, 1)
-        ax.set_ylim([1000, 0])
-        # ax.set_xlabel("Days")
-        ax.set_ylabel("Pressure")
+        # Add features
+        ax.add_feature(cfeature.LAND)
+        ax.add_feature(cfeature.COASTLINE)
+        ax.gridlines(color='black', linestyle='dotted')
 
-        # make the contours:
-        contour = plt.contourf(TIME, LEV, plotting_data.T, 15,
-                               cmap=plt.cm.jet,
-                               vmin=190,               # minimum contour value
-                               vmax=280)               # maximum contour value
+        # Plot trajectory path as black line
+        plt.plot(self.trajectory_1h['lon'].values,
+                 self.trajectory_1h['lat'].values,
+                 color='black',
+                 transform=ccrs.Geodetic(),
+                 zorder=1)
 
-        # add a color bar
-        plt.colorbar(ax=ax, shrink=.62, pad=0.02, label='temperature (K)')
+        # Plot points every 12 hours, shaded by trajectory age
+        plt.scatter(self.trajectory_12h['lon'].values,
+                    self.trajectory_12h['lat'].values,
+                    transform=ccrs.Geodetic(),
+                    c=self.trajectory_12h.index.values,
+                    vmin=min(self.trajectory_12h.index.values),
+                    vmax=max(self.trajectory_12h.index.values),
+                    cmap=cm,
+                    s=100,
+                    zorder=2,
+                    edgecolor='black',
+                    linewidth=0.8)
 
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
+        # Add labels at start of each day
+        for idx, row in self.trajectory_24h.iterrows():
+            month = calendar.month_abbr(row['month'])
+            at_lat, at_lon = ax.projection.transform_point(
+                x=row['lon'], y=row['lat'], src_crs=ccrs.Geodetic())
+            plt.annotate('{} {:02d}'.format(month, row['day']),
+                         xy=(at_lat, at_lon),
+                         xytext=(25, 15),
+                         textcoords='offset points',
+                         color='black',
+                         backgroundcolor='xkcd:silver',
+                         size=14,
+                         zorder=3,
+                         bbox=dict(boxstyle='round', alpha=0.9,
+                                   fc='xkcd:silver', ec='xkcd:silver'),
+                         arrowprops=dict(arrowstyle='wedge,tail_width=0.5',
+                                         alpha=0.9, fc='xkcd:silver',
+                                         ec='xkcd:silver'))
 
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
+        # Make colorbar
+        cbar = plt.colorbar(ax=ax, shrink=0.7, pad=0.05,
+                            label='Trajectory Age (hours)')
 
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
+        # Set circular outer boundary
+        # from https://scitools.org.uk/cartopy/docs/v0.15/examples/always_circular_stereo.html
+        theta = np.linspace(0, 2 * np.pi, 100)
+        center, radius = [0.5, 0.5], 0.5
+        verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+        circle = mpath.Path(verts * radius + center)
+        ax.set_boundary(circle, transform=ax.transAxes)
 
-        # title
-        plt.title('Temperature along Trajectory, height 10m')
+        ax.figure.set_size_inches(10, 10)
 
-        # add black line showing pressure of air mass
-        plt.plot(time, trajectory.pressure[every3hours], color='black')
+        # Save as pdf
+        # QUESTION: keep transparent=True as default, or set as argument?
+        # h=plt.gcf()
+        # h.savefig(map_filename, transparent=True)
 
-        # ------------------------------------------------------------
-        # plot specific humidity
-        # ------------------------------------------------------------
+    def make_line_plots(self, save_file_path, variables_to_plot=None):
+        '''
+        DOC
+        variables_to_plot: dict or None
+            if dict, then each key, value pair is a graph title and the set of
+                variable names to plot on that graph
+                ex: {'Cloud Cover': ['CLDTOT', 'CLDLOW', 'CLDHGH']}
+                each variable in the list must have the same units
+            if None, plot each line variable in the data set on its own figure
+        time axis is numerical days; could add option to set to some other
+            trajectory column instead, like datetime string
+        must give save_file_name? no good way to display multiple plots w/o saving
 
-        # create axes
-        ax = fig.add_subplot(4, 1, 2)
-        ax.set_ylim([1000, 0])
-        # ax.set_xlabel("Days")
-        ax.set_ylabel("Pressure")
+        QUESTION: how should I dynamically set fig height based on number of plots?
+        QUESTION: how/where should I check that variables_to_plot are valid names? new attribute for list of stored variable names?
+        '''
+        line_data = self.data.drop_dims('lev')  # remove all 3-D variables
+        time = self.trajectory['numerical time'].values
 
-        # make the contours:
-        plt.contourf(TIME, LEV, plotting_data.Q, 15,
-                     cmap=plt.cm.jet,
-                     vmin=0,
-                     vmax=.0032)
-
-        # Add a color bar
-        plt.colorbar(ax=ax, shrink=.62, pad=0.02,
-                     label='specific humidity (kg/kg)')
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # title
-        plt.title('Specific Humidity along Trajectory')
-
-        # add black line showing pressure of air mass
-        plt.plot(time, trajectory.pressure[every3hours], color='black')
-
-        # ------------------------------------------------------------
-        # plot relative humidity
-        # ------------------------------------------------------------
-
-        ax = fig.add_subplot(4, 1, 3)
-        ax.set_ylim([1000, 0])
-        ax.set_xlabel("Days")
-        ax.set_ylabel("Pressure")
-
-        # make the contours:
-        plt.contourf(TIME, LEV, plotting_data.RELHUM, 15,
-                     cmap=plt.cm.jet,
-                     vmin=0,
-                     vmax=100)
-
-        # add a color bar
-        plt.colorbar(ax=ax, shrink=.62, pad=0.02, label='percent')
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # title
-        plt.title('Relative Humidity along Trajectory')
-
-        # add black line showing pressure of air mass
-        plt.plot(time, trajectory.pressure[every3hours], color='black')
-
-        # ------------------------------------------------------------
-        # plot cloud fraction
-        # ------------------------------------------------------------
-
-        ax = fig.add_subplot(4, 1, 4)
-        ax.set_ylim([1000, 0])
-        ax.set_xlabel("Days")
-        ax.set_ylabel("Pressure")
-
-        # make the contours:
-        plt.contourf(TIME, LEV, plotting_data.CLOUD, 15,
-                     cmap=plt.cm.jet,
-                     vmin=0,
-                     vmax=1)
-
-        # add a color bar
-        plt.colorbar(ax=ax, shrink=.62, pad=0.02, label='cloud fraction')
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # title
-        plt.title('Cloud Fraction along Trajectory')
-
-        # add black line showing pressure of air mass
-        plt.plot(time, trajectory.pressure[every3hours], color='black')
-
-        # add padding between subplots
-        plt.tight_layout(h_pad=3.0)
-
-        # save as pdf
-        if save_contour_plots_as_pdf:
-            h = plt.gcf()
-            h.savefig(contour_filename)
-
-        plt.close()
-
-    # ------------------------------------------------------------
-    # Line plots: LW/SW flux, heat flux, cloud water path,
-    #             cloud forcing
-    # ------------------------------------------------------------
-    if make_line_plots:
-
-        # create figure
+        # Initialize figure
         plt.clf()
         fig = plt.figure()
         fig.set_figheight(14)
         fig.set_figwidth(8)
 
-        # ------------------------------------------------------------
-        # heat fluxes (sensible, latent)
-        # ------------------------------------------------------------
+        if isinstance(variables_to_plot, dict):
+            num_plots = len(variables_to_plot.keys())
+            for idx, (title, variable_list) in enumerate(variables_to_plot.items()):
+                # Check that all variables have same units
+                unit_list = [line_data[var].units for var in variable_list]
+                if unit_list.count(unit_list[0]) != len(unit_list):
+                    raise ValueError('Units do not match for the variables {}, cannot be plot together. Corresponding units for the given variables are {}'.format(
+                        variable_list, unit_list))
 
-        # create axes
-        ax = fig.add_subplot(4, 1, 1)
+                # Initialize plot
+                ax = fig.add_subplot(num_plots, 1, idx + 1)
+                ax.set_xlabel('Days')
+                ax.set_ylabel(unit_list[0])
 
-        units = plotting_data.variable_units['lhflx']
-        ax.set_xlabel("Days")
-        ax.set_ylabel(units)
+                # Plot all variables
+                for variable in variable_list:
+                    plt.plot(time, line_data[variable].values,
+                             '-o', label=line_data[variable].long_name)
 
-        # points
-        # surface latent heat flux
-        plt.scatter(time, plotting_data.lhflx, s=5)
-        # surface sensible heat flux
-        plt.scatter(time, plotting_data.shflx, s=5)
+                ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+                plt.title(title)
+            plt.tight_layout(h_pad=3.0)
+        elif variables_to_plot is None:
+            num_plots = len(line_data.keys())
 
-        # lines
-        plt.plot(time, plotting_data.lhflx,
-                 label=plotting_data.variable_descriptions['lhflx'])
-        plt.plot(time, plotting_data.shflx,
-                 label=plotting_data.variable_descriptions['shflx'])
+            # Plot all variables
+            for idx, variable in enumerate(line_data.keys()):
+                ax = fig.add_subplot(num_plots, 1, idx + 1)
+                ax.set_xlabel('Days')
+                ax.set_ylabel(line_data[variable].units)
+                plt.plot(time, line_data[variable].values, '-o')
+                plt.title(line_data[variable].long_name)
+        else:
+            raise ValueError('Invalid first argument; must be a dictionary or None, but given type {}'.format(
+                type(variables_to_plot)))
 
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
+        # Save as PDF
+        #h = plt.gcf()
+        # h.savefig(save_file_name)
 
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # shrink current axis by 20%
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-
-        # put a legend to the right of the current axis
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-
-        # title
-        plt.title('Heat Flux at Surface')
-
-        # ------------------------------------------------------------
-        # cloud forcing (LW, SW)
-        # ------------------------------------------------------------
-
-        # create axes
-        ax = fig.add_subplot(4, 1, 2)
-
-        units = plotting_data.variable_units['lwcf']
-        ax.set_xlabel("Days")
-        ax.set_ylabel(units)
-
-        # points
-        plt.scatter(time, plotting_data.lwcf, s=5)     # longwave cloud forcing
-        # shortwave cloud forcing
-        plt.scatter(time, plotting_data.swcf, s=5)
-        plt.scatter(time, plotting_data.swcf +
-                    plotting_data.lwcf, s=5)  # net cloud forcing
-
-        # line
-        plt.plot(time, plotting_data.lwcf,
-                 label=plotting_data.variable_descriptions['lwcf'])
-        plt.plot(time, plotting_data.swcf,
-                 label=plotting_data.variable_descriptions['swcf'])
-        plt.plot(time, plotting_data.swcf +
-                 plotting_data.lwcf, label='Net cloud forcing')
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # shrink current axis by 20%
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-
-        # put a legend to the right of the current axis
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-
-        # title
-        plt.title('Cloud Forcing at Surface')
-
-        # ------------------------------------------------------------
-        # water path (liquid, ice, total)
-        # ------------------------------------------------------------
-
-        # create axes
-        ax = fig.add_subplot(4, 1, 3)
-
-        units = plotting_data.variable_units['icepath']
-        ax.set_ylabel(units)
-        ax.set_xlabel("Days")
-
-        # points
-        # total grid-box cloud ice water path
-        plt.scatter(time, plotting_data.icepath, s=5)
-        # total grid-box cloud liquid water path
-        plt.scatter(time, plotting_data.liqpath, s=5)
-        # total grid-box cloud water path (liq + ice)
-        plt.scatter(time, plotting_data.waterpath, s=5)
-
-        # lines
-        plt.plot(time, plotting_data.icepath,
-                 label=plotting_data.variable_descriptions['icepath'])
-        plt.plot(time, plotting_data.liqpath,
-                 label=plotting_data.variable_descriptions['liqpath'])
-        plt.plot(time, plotting_data.waterpath,
-                 label=plotting_data.variable_descriptions['waterpath'])
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # shrink current axis by 20%
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-
-        # put a legend to the right of the current axis
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-
-        # title
-        plt.title('Cloud Water Path at Surface')
-
-        # ------------------------------------------------------------
-        # Flux at surface
-        # ------------------------------------------------------------
-
-        # create axes
-        ax = fig.add_subplot(4, 1, 4)
-
-        units = plotting_data.variable_units['flds']
-        ax.set_ylabel(units)
-        ax.set_xlabel("Days")
-
-        # points
-        # downwelling long wave flux at surface
-        plt.scatter(time, plotting_data.flds, s=5)
-        plt.scatter(time, plotting_data.flns - plotting_data.flds,
-                    s=5)  # net long wave flux at surface
-        # downwelling solar flux at surface
-        plt.scatter(time, plotting_data.fsds, s=5)
-        plt.scatter(time, plotting_data.fsns - plotting_data.fsds,
-                    s=5)   # net solar flux at surface
-
-        # lines
-        plt.plot(time, plotting_data.flds,
-                 label=plotting_data.variable_descriptions['flds'])
-        plt.plot(time, plotting_data.flns - plotting_data.flds,
-                 label='Upwelling longwave flux at surface')
-        plt.plot(time, plotting_data.fsds,
-                 label=plotting_data.variable_descriptions['fsds'])
-        plt.plot(time, plotting_data.fsns - plotting_data.fsds,
-                 label='Upwelling solar flux at surface')
-
-        # create minor ticks every three hours
-        ax.xaxis.set_minor_locator(minorLocator)
-
-        # set x-axis labels every day
-        plt.xticks(locs, labels)
-
-        # add gridlines
-        ax.grid(color="grey", linestyle="dotted")
-
-        # shrink current axis by 20%
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-
-        # put a legend to the right of the current axis
-        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-
-        # title
-        plt.title('Flux at Surface')
-
-        # add padding between subplots
-        plt.tight_layout(h_pad=3.0)
-
-        # save as pdf
-        if save_line_plots_as_pdf:
-            h = plt.gcf()
-            h.savefig(line_plots_filename, bbox_inches="tight")
-
-        plt.close()
-
-    # ------------------------------------------------------------
-    # Plot lat/lon trajectory on map
-    # ------------------------------------------------------------
-    if plot_map:
-        # create figure
-        plt.clf()
-        fig = plt.figure(1, figsize=(8, 8))
-
-        # create axes
-        ax = plt.axes(projection=ccrs.NorthPolarStereo())
-        ax.set_global()
-        ax.set_extent([0.000001, 360, 55, 90], crs=ccrs.PlateCarree())
-
-        # convert longitude from -180-180 scale to to 360 degree
-        # for i in np.where(lons[:] > 0):
-        #    lons[i]=lons[i]-360
-
-        plt.plot(trajectory.lons[every3hours], trajectory.lats[every3hours],
-                 color='black',
-                 transform=ccrs.PlateCarree(),
-                 # alpha=.8,          # make slightly transparent
-                 zorder=5)          # put below scatter points
-
-        # add land + coasts
-        ax.add_feature(cfeature.LAND)
-        ax.add_feature(cfeature.COASTLINE)
-        ax.stock_img()
-
-        # add gridlines
-        ax.gridlines(color="black", linestyle="dotted")
-
-        # add labels for the start of each day
-        for ind, label in zip(every24hours, labels):
-
-            lat = trajectory.lats[ind]
-            lon = trajectory.lons[ind]
-
-            # plt.annotate does not have a transform parameter, so first we find
-            # xy coordinates for the points
-            at_x, at_y = ax.projection.transform_point(
-                lon, lat, src_crs=ccrs.PlateCarree())
-
-            # annotate each day with date
-            plt.annotate(label,
-                         # location of point to be labeled
-                         xy=(at_x, at_y),
-                         # offset distance from point for label
-                         xytext=(15, -10),
-                         textcoords='offset points',
-                         color='black',
-                         backgroundcolor='white',
-                         size=6,
-                         arrowprops=dict(arrowstyle='-', color='white', linewidth=1.0))
-
-        # plot all points on map
-        plt.scatter(trajectory.lons[trajectory.indices['every12hours']], trajectory.lats[trajectory.indices['every12hours']],
-                    transform=ccrs.PlateCarree(),
-                    # set color of point based on pressure
-                    c=trajectory.pressure[trajectory.indices['every12hours']],
-                    cmap='jet_r',
-                    s=25,                           # label text size
-                    zorder=10,                      # put above plot line
-                    edgecolor='black',
-                    linewidth=.8)
-        # title
-        plt.title('Trajectory for air mass starting at height 10m')
-
-        # make colorbar
-        cbar = plt.colorbar(ax=ax, shrink=.5, pad=0.1,
-                            label='pressure of air mass (hPa)')
-        cbar.ax.invert_yaxis()
-
-        # save as pdf
-        if save_map_as_pdf:
-            h = plt.gcf()
-            h.savefig(map_filename)
-
-        plt.close()
+    def make_contour_plots(self, save_file_path, variables_to_plot=None):
+        '''
+        DOC
+        '''
