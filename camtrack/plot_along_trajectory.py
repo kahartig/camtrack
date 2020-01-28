@@ -12,6 +12,8 @@ from netCDF4 import Dataset    # QUESTION: do I still use this?
 import matplotlib.pyplot as plt
 import xarray as xr
 import pandas as pd
+import os
+import cftime
 import math    # QUESTION: do I still use this?
 import sys    # QUESTION: do I still use this?
 
@@ -164,9 +166,7 @@ class TrajectoryFile:
         trajectories = pd.read_csv(filepath, delim_whitespace=True, header=None, names=traj_columns, index_col=[
                                    0, 8], dtype=traj_dtypes, skiprows=traj_skiprow)
         trajectories.sort_index(inplace=True)
-        #print('Starting position for trajectory {}:'.format(trajectory_number))
-        #print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
-
+        
         # construct column with datetime string
         def traj_datetime(row):
             return '00{:02.0f}-{:02.0f}-{:02.0f} {:02.0f}:{:02.0f}:00'.format(row['year'], row['month'], row['day'], row['hour'], row['minute'])
@@ -175,12 +175,14 @@ class TrajectoryFile:
         # construct column with cftime Datetime objects
         def traj_cftimedate(row):
         	return cftime.DatetimeNoLeap(row['year'], row['month'], row['day'], row['hour'], row['minute'])
-        	trajectories['cftime date'] = trajectories.apply(traj_cftimedate, axis=1)
+        trajectories['cftime date'] = trajectories.apply(traj_cftimedate, axis=1)
         self.data = trajectories
 
     def winter(self, out_format):
         '''
         Return year(s) corresponding to the winter in which this trajectory occurred
+
+        Should there be an option to look at a single trajectory? if some stop early
 
         out_format='first' or 'first-second' or 'firstsecond'
             for the winter of 0009-0010:
@@ -190,10 +192,11 @@ class TrajectoryFile:
         returns a string
         '''
         if any(self.data['month'] > 10):
-            start_year = min(trajectories.data['year'])
+            start_year = min(self.data['year'])
         else:
-            start_year = min(trajectories.data['year']) - 1
+            start_year = min(self.data['year']) - 1
         end_year = start_year + 1
+
         if out_format == 'first':
             output = '{:02d}'.format(start_year)
         elif out_format == 'first-second':
@@ -226,7 +229,7 @@ class WinterCAM:
     name_to_h.update(dict.fromkeys(['ICEFRAC','LANDFRAC','OCNFRAC','T', 'T200',
     	'T500','T850','TREFHT','TREFHTMN','TREFHTMX','TS','TSMN','TSMX'], 'h4'))
 
-    def __init__(self, file_dir, trajectories):
+    def __init__(self, file_dir, trajectories, nosetest=False):
         '''
         file_dir is parent directory of CAM files
         assuming file name format pi_3h_<yr range>_h?.nc
@@ -234,20 +237,27 @@ class WinterCAM:
             contains a family of trajectories with same start point and time
         assumes all trajectories run over the same time window
         	takes overall min and max of times listed in trajectories
+        nosetest only True if running nosetests
         '''
         # Open the CAM files with xarray
-        winter_str = trajectories.winter(out_format='firstsecond')
-        nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h1.nc')
-        ds1 = xr.open_dataset(nc_file_path)
-        nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h2.nc')
-        ds2 = xr.open_dataset(nc_file_path)
-        nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h3.nc')
-        ds3 = xr.open_dataset(nc_file_path)
-        nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h4.nc')
-        ds4 = xr.open_dataset(nc_file_path)
+        if not nosetest:
+            winter_str = trajectories.winter(out_format='firstsecond')
+            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h1.nc')
+            ds1 = xr.open_dataset(nc_file_path)
+            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h2.nc')
+            ds2 = xr.open_dataset(nc_file_path)
+            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h3.nc')
+            ds3 = xr.open_dataset(nc_file_path)
+            nc_file_path = os.path.join(file_dir, 'pi_3h_' + winter_str + '_h4.nc')
+            ds4 = xr.open_dataset(nc_file_path)
 
-        # Map h1 through h4 to ds1 through ds4
-        self.h_to_d = {'h1': d1, 'h2': d2, 'h3': d3, 'h4': d4}
+            # Map h1 through h4 to ds1 through ds4
+            self.h_to_d = {'h1': d1, 'h2': d2, 'h3': d3, 'h4': d4}
+        else:
+            # Only activated when running nosetests
+            nc_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tests', 'sample_CAM4_for_nosetests.nc')
+            ds1 = xr.open_dataset(nc_file_path)
+            self.h_to_d = dict.fromkeys(['h1', 'h2', 'h3', 'h4'], ds1)
 
         # Lists of coordinate variables
         #time = np.array(ds1['time'][:])
@@ -265,18 +275,21 @@ class ClimateAlongTrajectory:
         DOC
         trajectory file is TrajectoryFile object
         trajectory number is index corresponding to desired traj
-        variables_to_plot: list of CAM variable names (all caps, 'field name') for plotting
+        variables_to_plot: list of CAM variable names (string in all caps, like 'LANDFRAC') for plotting
         note that self.trajectory is a Pandas DataFrame while self.data is an xarray Dataset
 
         NEAREST NEIGHBOR lat and lon only (for now)
         '''
         # Check that all requested variables exist in CAM files
+        # QUESTION: should this check against the list of actual variables in the CAM file instead of just the h-file mapping?
         if not all(key in winter_file.name_to_h for key in variables_to_plot):
             missing_keys = [key for key in variables_to_plot if key not in winter_file.name_to_h]
-            raise ValueError('One or more variable keys provided is not present in CAM output files. Invalid key(s): {}'.format(missing_keys))
+            raise ValueError('One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
         
         # Select a single trajectory
         single_trajectory = trajectories.data.loc[trajectory_number].copy()
+        #print('Starting position for trajectory {}:'.format(trajectory_number))
+        #print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
 
         # Extract data every 3 hours
         #    CAM only provides output in 3-hourly intervals
@@ -288,18 +301,6 @@ class ClimateAlongTrajectory:
         time_coord = {'time': self.trajectory['cftime date'].values}
         traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
         traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
-        #CAM_lat = xr.DataArray(
-        #   self.lat[np.argmin(abs(traj_lat.data[:, np.newaxis] - self.lat), axis=1)],
-        #   dims=('time'),
-        #   coords=time_coord)
-        #CAM_lon = xr.DataArray(
-        #   self.lon[np.argmin(abs(traj_lon.data[:, np.newaxis] - self.lon), axis=1)],
-        #   dims=('time'),
-        #   coords=time_coord)
-        #time_to_position = xr.Dataset({'trajectory lat': traj_lat,
-        #   'trajectory lon': traj_lon,
-        #   'nearest lat': CAM_lat,
-        #   'nearest lon': CAM_lon})
 
         # Map trajectory times to climate variables
         # xarray supports vectorized indexing across multiple dimensions
