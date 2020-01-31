@@ -4,9 +4,9 @@ Author: Kara Hartig
 Find distinct cold events by comparing 3-hourly temperatures to winter climatology
 
 Functions:
-	anomaly_DJF: produce an array of temperature anomalies from climatological average
-	find_coldest: sort anomaly temperature array and identify X coldest distinct events
-	OLD_find_coldest: an earlier version of find_coldest; probably redundant?
+	anomaly_DJF:  produce an array of temperature anomalies from climatological average
+	find_coldest:  sort anomaly temperature array and identify X coldest distinct events
+	OLD_find_coldest:  an earlier version of find_coldest; probably redundant?
 """
 
 # Standard Imports
@@ -17,8 +17,30 @@ import cftime
 
 def anomaly_DJF(data_dict_list, method):
 	"""
-	DOC
-	method: 'absolute' or 'scaled'
+	Calculate the anomaly from the DJF mean of the yearly data in data_dict_list
+
+	Parameters
+	----------
+	data_dict_list: list of dictionaries
+		each element in the list is a dictionary containing one winter (DJF) of
+		data, a [time, lat, lon] array accessed with 'data' key
+	method: string
+		must be either 'absolute' or 'scaled'
+		if 'absolute', output is just data - DJF mean
+		if 'scaled', output is (data - DJF mean)/stdev
+
+	Returns
+	-------
+	diff_dict: dictionary
+		'diff': a [time, lat, lon] array of anomalies from the DJF mean,
+			calculated according to method argument. Arrays from each year of
+			the input have been concatenated along the first (time) axis;
+			corresponding time coordinates are stored in 'time'
+		'mean': a [lat, lon] array of the DJF mean across all years provided
+		'time': coordinate array for time; formed by concatenating along all
+			years provided in data_dict_list
+		'lat': coordinate array for latitude
+		'lon': coordinate array for longitude
 	"""
 	# Check that all data arrays have the same lat and lon dimensions
 	same_lat = np.allclose(np.concatenate([d['lat'] for d in data_dict_list]), np.tile(data_dict_list[0]['lat'], len(data_dict_list)))
@@ -50,7 +72,41 @@ def anomaly_DJF(data_dict_list, method):
 
 def find_coldest(climatology_dict, number_of_events, distinct_conditions):
 	"""
-	DOC
+	Sort data from lowest to highest and select the number_of_events distinct
+	events with the lowest values
+
+	Two events, where 'events' are separate entries in the temperature data
+	contained in climatology_dict, are considered distinct if the absolute
+	difference in the times, latitudes, and longitudes of the two events are
+	greater than or equal to the minimum separations given in
+	distinct_conditions. Two events are indistinct only if all three
+	distinctness conditions are violated.
+
+	Parameters
+	----------
+	climatology_dict: dictionary
+		the output of climatology.anomaly_DJF
+		must include the keys 'diff' (data to be sorted), 'time', 'lat', 'lon'
+	number_of_events: integer
+		number of distinct events to select and return from climatology_dict
+	distinct_conditions: dictionary
+		'delta t': integer or float; minimum separation in days for two events
+			to be considered distinct
+		'delta lat': integer or float; minimum separation in degrees latitude
+		'delta lon':integer or float; minimum separation in degrees longitude
+
+	Returns
+	-------
+	cold_events: pandas DataFrame
+		contains time, location, and associated anomaly temperature of the
+		distinct events discovered, indexed by an integer ranking the events
+		from coldest (0) to warmest (number_of_events - 1)
+		'date': date-time string of event
+		'time': time of event in days since 0001-01-01 00:00:00
+		'lat': latitude of event in degrees
+		'lon': longitude of event in degrees
+		'temp anomaly': temperature anomaly associated with the event; taken
+			from climatology_dict['diff'] at the time, lat, and lon listed
 	"""
 	temperature_anomaly = climatology_dict['diff']
 	times = climatology_dict['time']

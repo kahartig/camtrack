@@ -2,6 +2,18 @@
 Author: Kara Hartig
 
 Extract climate variables from CAM along trajectories from HYSPLIT
+
+Classes:
+    ClimateAlongTrajectory: store CAM variables at times and locations
+        corresponding to trajectory paths
+
+NOTES on line_plots:
+    time axis is numerical days; could add option to set to some other
+        trajectory column instead, like datetime string
+    QUESTION: how should I dynamically set fig height based on number of plots?
+    QUESTION: how/where should I check that variables_to_plot are valid names? new attribute for list of stored variable names?
+    QUESTION: add option to give list of variables to plot? one per plot
+
 """
 
 # Standard imports
@@ -28,18 +40,55 @@ import cartopy.feature as cfeature
 
 class ClimateAlongTrajectory:
     '''
-    Stores climate variables along given air parcel trajectory
+    Store climate variables along given air parcel trajectory
+
+    NOTE: uses nearest-neighbor lat and lon points from CAM file; no
+    interpolation yet
+
+    Methods
+    -------
+    trajectory_plot
+        plot map of trajectory path in North Polar Stereo
+    line_plots
+        line plots of selected 2-D variables along trajectory
+    contour_plots
+        contour plots of selected 3-D variables along trajectory
+
+    Attributes
+    ----------
+    direction: string
+        direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
+    trajectory: pandas DataFrame
+        3-hourly points along the trajectory, indexed by trajectory age; output
+        frequency matches that of CAM file
+    trajectory_1h: pandas DataFrame
+        same as trajectory but output is every hour; the source format from
+        TrajectoryFile
+    trajectory_12h: pandas DataFrame
+        same as trajectory but output is every 12 hours
+    trajectory_24h: pandas DataFrame
+        same as trajectory but output is every 24 hours
+    data: xarray Dataset
+        values of 2-D and 3-D variables along the trajectory. Dimensions are
+        'time' and possibly 'lev' (if there are any 3-D variables). 2-D
+        variables have 'time' dimension and 3-D have 'time' and 'lev'. Lat and
+        lon are included as coordinate arrays with dimension 'time' and reflect
+        trajectory path or nearest-neighbor equivalent using CAM coordinates
     '''
 
     def __init__(self, winter_file, trajectories, trajectory_number, variables):
         '''
-        DOC
-        trajectory file is TrajectoryFile object
-        trajectory number is index corresponding to desired traj
-        variables: list of CAM variable names (string in all caps, like 'LANDFRAC') to store (for plotting)
-        note that self.trajectory is a Pandas DataFrame while self.data is an xarray Dataset
-
-        NEAREST NEIGHBOR lat and lon only (for now)
+        Parameters
+        ----------
+        winter_file: WinterCAM instance
+            winter CAM file corresponding to trajectories
+        trajectories: TrajectoryFile instance
+            contains trajectory of interest
+        trajectory_number: integer
+            number corresponding to trajectory of interest; the trajectory data
+            is retrieved with trajectories.data.loc[trajectory_number]
+        variables: list of strings
+            list of CAM variables (field names in all caps) that will be stored
         '''
         # Check that all requested variables exist in CAM files
         # QUESTION: should this check against the list of actual variables in
@@ -95,12 +144,16 @@ class ClimateAlongTrajectory:
                     key, variable_data.dims))
         self.data = xr.merge(list_of_variables)
 
-    def plot_trajectory_path(self, save_file_path=None):
+    def trajectory_plot(self, save_file_path=None):
         '''
-        DOC
-        save_file_path: directory path and name for saving file or None
-                if None, just produce figure inline w/o saving
-            file name suffix will determine saved file format
+        Either saves or displays a map of trajectory path
+
+        Parameters
+        ----------
+        save_file_path: path-like or None
+            if None, plot is displayed to screen with plt.show()
+            if path-like, must be directory path and name for saving figure
+                file format assumed from suffix
         '''
         # Initialize plot
         plt.clf()
@@ -191,22 +244,31 @@ class ClimateAlongTrajectory:
         else:
             plt.show()
 
-    def make_line_plots(self, save_file_path=None, variables_to_plot=None):
+    def line_plots(self, save_file_path=None, variables_to_plot=None):
         '''
-        DOC
+        Either saves or displays a series of line plots of 2-D variables along
+        trajectory
+
+        Parameters
+        ----------
+        save_file_path: path-like or None
+            if None, plot is displayed to screen with plt.show()
+            if path-like, must be directory path and name for saving figure
+                file format assumed from suffix
+        variables_to_plot: dict or None
+            if None, plot every 2-D variable present in this instance on its
+                own plot
+            if dict, then each key, value pair is a graph title and the set of
+                variable names to plot on that graph
+                ex: {'Cloud Cover': ['CLDTOT', 'CLDLOW', 'CLDHGH']}
+                each variable in the list must have the same units
+
         variables_to_plot: dict or None
             if dict, then each key, value pair is a graph title and the set of
                 variable names to plot on that graph
                 ex: {'Cloud Cover': ['CLDTOT', 'CLDLOW', 'CLDHGH']}
                 each variable in the list must have the same units
             if None, plot each line variable in the data set on its own figure
-        time axis is numerical days; could add option to set to some other
-            trajectory column instead, like datetime string
-        if save_file_path=None, just produce figure inline w/o saving
-
-        QUESTION: how should I dynamically set fig height based on number of plots?
-        QUESTION: how/where should I check that variables_to_plot are valid names? new attribute for list of stored variable names?
-        QUESTION: add option to give list of variables to plot? one per plot
         '''
         line_data = self.data.drop_dims(
             'lev', errors='ignore')  # remove all 3-D variables, if present
@@ -260,13 +322,22 @@ class ClimateAlongTrajectory:
         else:
             plt.show()
 
-    def make_contour_plots(self, save_file_path, variables_to_plot):
+    def contour_plots(self, save_file_path=None, variables_to_plot):
         '''
-        DOC
-        variables_to_plot: list
+        Either saves or displays a series of line plots of 2-D variables along
+        trajectory
 
-        NOTE: for now, vertical coordinate in plots is just lev index
-                zeroth index of lev is TOP OF ATMOSPHERE, not surface
+        NOTE: vertical coordinate is the hybrid level index. 0 is
+        top-of-atmosphere
+
+        Parameters
+        ----------
+        save_file_path: path-like or None
+            if None, plot is displayed to screen with plt.show()
+            if path-like, must be directory path and name for saving figure
+                file format assumed from suffix
+        variables_to_plot: list of strings
+            list of CAM 3-D variables names to plot
         '''
         # Set up plot coordinates
         time = cftime.date2num(

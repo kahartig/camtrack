@@ -2,6 +2,19 @@
 Author: Kara Hartig
 
 Handle data from HYSPLIT trajectories and CAM model output
+
+Classes:
+    TrajectoryFile:  read in and store data from HYSPLIT .traj file
+    WinterCAM:  read in and store data from CAM4 winter (Nov-Feb) file
+Functions:
+    subset_nc:  subset a netCDF file by time, latitude, and longitude
+    slice_dim:  given coordinate bounds, generate index slice for corresponding dimension
+    make_CONTROL:  print a CONTROL file for running HYSPLIT trajectories
+
+ASSUMPTIONS:
+    CAM time units are days since 0001-01-01 00:00:00 and calendar is 'noleap'
+    all trajectories cover same time window; none terminate early
+    available CAM variables are the same as those listed by Zeyuan (see WinterCAM.name_to_h)
 """
 
 # Standard imports
@@ -17,46 +30,53 @@ import calendar
 
 class TrajectoryFile:
     '''
-        Class for storage of all data read in from a .traj file, an ASCII file
+    Store of all data read in from a .traj file, an ASCII file
     output from HYSPLIT. These .traj files contain lat/lon locations of
     an air mass every hour along a trajectory.
 
-    init Input Parameters
-    ----------
-    filepath: string
-        path to .traj file
+    Methods
+    -------
+    winter
+        return year(s) corresponding to this trajectory in user-specified format
 
     Attributes
     ----------
     grids: pandas DataFrame
-        contains information for all grids used: model, year, month, day, hour,
-        and fhour
+        contains all grids used: model, year, month, day, hour, and fhour
     traj_start: pandas DataFrame
         contains initialization information for all trajectories: date, time,
         and location at which trajectory was started
     diag_var_names: list
-        list of names of diagnostic output variables. Corresponding values are
-        presented in the trailing columns of the .traj files, following the
-        current height
-    number_of_trajectories: int
+        list of names of diagnostic output variables. Corresponding values along
+        trajectories are in the trailing columns of the .traj file
+    ntraj: int
         number of distinct trajectories stored in .traj file
     direction: string
         direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
     data: pandas DataFrame
         trajectory data
         uses a MultiIndex:
-            top level: int from 1 to number_of_trajectories
+            top level: int from 1 to ntraj
                 trajectory number 'traj #'
             second level: float from 0.0 to -(total length of trajectory)
                 age of trajectory 'traj age'
             EX: to access trajectory 3 at time -5 hours, use data.loc[3, -5]
         columns: grid #, year, month, day, hour, minute, fhour, lat, lon,
-            height (m), <any diagnostic variables...>, datetime, cftime date
-        note that cftime date is a cftime.DatetimeNoLeap object
-                useful for indexing netCDF files by time dimension
+            height (m), <any diagnostic variables...>, datetime, cftime date,
+            numerical time
+        note that there are three equivalent representations of time:
+            datetime: str; 'YYYY-MM-DD HH:MM:SS'
+            cftime date: cftime.DatetimeNoLeap()
+            numerical time: float; days since 0001-01-01 00:00:00
     '''
 
     def __init__(self, filepath):
+        '''
+        Parameters
+        ----------
+        filepath:  string
+            file path to HYSPLIT trajectory file
+        '''
         # open the .traj file
         file = open(filepath, 'r')
 
@@ -87,7 +107,7 @@ class TrajectoryFile:
         ntraj = int(header_2[0])          # number of trajectories
         direction = header_2[1]           # direction of trajectories
         vert_motion = header_2[2]         # vertical motion calculation method
-        self.number_of_trajectories = ntraj
+        self.ntraj = ntraj
         self.direction = direction
 
         # read in list of trajectories
@@ -165,16 +185,22 @@ class TrajectoryFile:
 
     def winter(self, out_format):
         '''
-        Return year(s) corresponding to the winter in which this trajectory occurred
+        Return year(s) corresponding to the winter in which these trajectories occurred
 
-        Should there be an option to look at a single trajectory? if some stop early
-
-        out_format='first' or 'first-second' or 'firstsecond'
+        Parameters
+        ----------
+        out_format: string
+            output format; must be 'first' or 'first-second' or 'firstsecond'
             for the winter of 0009-0010:
                 'first' -> '09'
                 'first-second' -> '09-10'
                 'firstsecond' -> '0910'
-        returns a string
+
+        Returns
+        -------
+        output: string
+            year(s) corresponding to the winter in which the trajectories occurred
+            format specified by out_format argument
         '''
         if any(self.data['month'] > 10):
             start_year = min(self.data['year'])
@@ -196,7 +222,23 @@ class TrajectoryFile:
 
 class WinterCAM:
     '''
-    Class for storing CAM4 output data along a set of trajectories
+    Store CAM4 output data corresponding to a set of trajectories
+
+    Methods
+    -------
+    (None)
+    
+    Attributes
+    ----------
+    name_to_h (class attribute): dictionary
+        maps CAM variable name string to corresponding file, denoted by string
+        'h1', 'h2', 'h3', or 'h4'
+    h_to_d: dictionary
+        maps 'h1' through 'h4' to xarray Dataset containing the corresponding
+        CAM data
+    lat: numpy array of latitude coordinates
+    lon: numpy array of longitude coordinates
+    
     '''
 
     # Map CAM variable names to h1 through h4 files
@@ -218,14 +260,20 @@ class WinterCAM:
 
     def __init__(self, file_dir, trajectories, nosetest=False):
         '''
-        file_dir is parent directory of CAM files
-        assuming file name format pi_3h_<yr range>_h?.nc
-        trajectories is an instance of TrajectoryFile
-            contains a family of trajectories with same start point and time
-        assumes all trajectories run over the same time window
-                takes overall min and max of times listed in trajectories
-        nosetest only True if running nosetests
-                if True, ignore file_dir and load sample_CAM4_for_nosetests.nc
+        Parameters
+        ----------
+        file_dir: string
+            parent directory of CAM files
+            assumes CAM file names within file_dir are in the format
+            'pi_3h_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
+        trajectories: TrajectoryFile instance
+            a family of trajectories that start at the same place and time. CAM
+            files are stored that correspond to the year(s) associated with
+            these trajectories
+        nosetest: boolean
+            if True, ignore file_dir and load a sample CAM file from package's
+                test directory for running nosetests
+            Default is False
         '''
         # Open the CAM files with xarray
         if not nosetest:
@@ -280,7 +328,7 @@ class WinterCAM:
 
 
 def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_bounds, landfrac_min=0.9, testing=False):
-	"""
+	'''
 	Take a subset in time and lat/lon of the variable specified by
 	desired_variable_key from filename and mask by landfraction. The time subset
 	runs from December 1st through February 28th of the following year and the
@@ -326,7 +374,7 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
 		'lon': array of longitudes corresponding to subsetted lon dimension
 		if testing=True, also includes:
 			'unmasked_data': same as 'data' but without the landfraction masking
-	"""
+	'''
 	nc_file = Dataset(filename)
 	variable_object = nc_file.variables[desired_variable_key]
 	if variable_object.dimensions != ('time', 'lat', 'lon'):
@@ -368,7 +416,7 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
 
 
 def slice_dim(file, dimension_key, low_bound, upper_bound=np.inf, allow_reset=False):
-	"""
+	'''
 	Given closed bounds [low_bound, upper_bound], return a slice object of the
 	given dimension that spans the range low_bound <= dimension <= upper_bound.
 
@@ -404,7 +452,7 @@ def slice_dim(file, dimension_key, low_bound, upper_bound=np.inf, allow_reset=Fa
 	-------
 	slice object spanning the closed interval [low_bound, upper_bound] of the
 	dimension
-	"""
+	'''
 	if not isinstance(file, Dataset):
 		raise TypeError('File argument must be an instance of the netCDF4 Dataset class; given type {}'.format(type(file)))
 	else:
@@ -437,7 +485,7 @@ def slice_dim(file, dimension_key, low_bound, upper_bound=np.inf, allow_reset=Fa
 	return slice(slice_idx_list[0], slice_idx_list[-1]+1)
 
 def make_CONTROL(events, traj_heights, backtrack_time, output_dir, traj_dir, data_file_path):
-	"""
+	'''
 	Generate the CONTROL files that HYSPLIT uses to set up a backtracking run
 	based on the entries in 'events'.
 
@@ -473,7 +521,7 @@ def make_CONTROL(events, traj_heights, backtrack_time, output_dir, traj_dir, dat
 	data_file_path: string
 		full path and filename of CAM4 data file from which to calculate
 		trajectories
-	"""
+	'''
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 	if not os.path.exists(traj_dir):
