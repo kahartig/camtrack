@@ -322,7 +322,7 @@ class ClimateAlongTrajectory:
         else:
             plt.show()
 
-    def contour_plots(self, save_file_path=None, variables_to_plot):
+    def contour_plots(self, save_file_path=None, variables_to_plot=None):
         '''
         Either saves or displays a series of line plots of 2-D variables along
         trajectory
@@ -338,6 +338,7 @@ class ClimateAlongTrajectory:
                 file format assumed from suffix
         variables_to_plot: list of strings
             list of CAM 3-D variables names to plot
+            NOTE: no special behavior if None; should make a default
         '''
         # Set up plot coordinates
         time = cftime.date2num(
