@@ -61,8 +61,8 @@ def anomaly_DJF(data_dict_list, method):
 		raise ValueError('Longitude dimensions of data in data_dict_list do not match')
 
 	data_all_winters = np.concatenate([d['data'] for d in data_dict_list], axis=0)
-	mean_all_winters = np.nanmean(data_all_winters, axis=0)
-	stdev_all_winters = np.nanstd(data_all_winters, axis=0)
+	mean_all_winters = np.mean(data_all_winters, axis=0)
+	stdev_all_winters = np.std(data_all_winters, axis=0)
 	if method == 'absolute':
 		difference = data_all_winters - mean_all_winters  # CHECK NUMPY BROADCASTING
 	elif method == 'scaled':
