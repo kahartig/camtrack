@@ -13,6 +13,12 @@ Functions:
 import numpy as np
 import pandas as pd
 import cftime
+import math
+
+# Misc imports
+from numpy.random import seed
+from numpy.random import randint
+from operator import itemgetter
 
 
 def anomaly_DJF(data_dict_list, method):
@@ -68,6 +74,58 @@ def anomaly_DJF(data_dict_list, method):
 	time_all_winters = np.concatenate([d['time'] for d in data_dict_list])
 	diff_dict = {'diff': difference, 'mean': mean_all_winters, 'time': time_all_winters, 'lat': latitudes, 'lon': longitudes}
 	return diff_dict
+
+
+def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=None):
+	"""
+	Sort data from lowest to highest and randomly sample number_of_events from a
+	specified percentile range of the distribution
+
+	percentile_range: list-like of 2 numbers from 0 to 100
+	if seed is not None, will be passed to randint
+
+	"""
+	def samples2values(samples_idx, sorted_coord_idx, coordinates):
+		# sorted_coord_idx = sorted_idx[index of desired coordinate]
+		coordinate_idx = list(itemgetter(*samples)(sorted_coord_idx))
+		coordinate_values = list(itemgetter(*coordinate_idx)(coordinates))
+		return coordinate_values, coordinate_idx
+
+	def num2datestring(row):
+		# ASSUMES no_leap calendar, units='days since 0001-01-01 00:00:00'
+		date = cftime.num2date(row['time'], 'days since 0001-01-01 00:00:00', calendar='noleap')
+		return '{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}'.format(date.year, date.month, date.day, date.hour, date.minute, date.second)
+	
+	temperature_anomaly = climatology_dict['diff']
+	times = climatology_dict['time']
+	latitudes = climatology_dict['lat']
+	longitudes = climatology_dict['lon']
+
+	# Sort by temperature anomaly, from coldest (most negative) to warmest (most positive and NaN)
+	sorted_idx = np.unravel_index(temperature_anomaly.argsort(axis=None), temperature_anomaly.shape)
+		# first index: 0-index time array, 1-index lat array, 2-index lon array
+		# second index runs from coldest to warmest
+
+	# Randomly sample events from given percentile range
+	num_notnan = np.count_nonzero(~np.isnan(temperature_anomaly))
+	idx_lower = int(math.floor( (percentile_range[0]/100.)*num_notnan ))
+	idx_upper = int(math.floor( (percentile_range[1]/100.)*num_notnan ))
+	if seed is not None:
+		seed(seed)
+	samples = randint(idx_lower, idx_upper, number_of_events) # samples is a list of indices for the second index of sorted_idx
+
+	# Pull coordinate values cooresponding to samples
+	sample_times, sample_times_idx = samples2values(samples, sorted_idx[0], times)
+	sample_lat, sample_lat_idx = samples2values(samples, sorted_idx[1], latitudes)
+	sample_lon, sample_lon_idx = samples2values(samples, sorted_idx[2], longitudes)
+	sample_temp_anomaly = [temperature_anomaly[t, la, lo] for t,la,lo in zip(sample_times_idx, sample_lat_idx, sample_lon_idx)]
+
+	# Construct cold_events DataFrame
+	cold_events = pd.DataFrame.from_dict({'time': sample_times, 'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
+	cold_events['date'] = cold_events.apply(num2datestring, axis=1)
+
+	print("Randomly sampled {} events from the {}-{} percentile range of temperature anomalies from DJF mean".format(number_of_events, percentile_range[0], percentile_range[1]))
+	return cold_events
 
 
 def find_coldest(climatology_dict, number_of_events, distinct_conditions):
