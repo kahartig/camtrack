@@ -1,9 +1,10 @@
-# convert_cam_to_arl.py
+# convert_cam_to_arl.jpy
 # by Kara Hartig
-# last modified: August 7, 2019
+# last modified: February 11, 2020
 # based on:
 #     convert_cam_to_arl.py by Pratap Singh
 #     wrfout2arl.html by Yaqiang Wang
+# note: this script is in Jython, not standard Python, and must be run with MeteoInfo
 #
 # Convert a netcdf output file from the Community Atmosphere Model, version 4, to
 # .arl input format for HYSPLIT backtracking code
@@ -12,20 +13,23 @@
 # As it runs, the code produces and deletes a file called cam_to_arl_temp.arl in the output 
 # directory.  This file must not be tampered with while the code is running.
 # To run within MeteoInfo main directory:
-#    on Unix: >>./milab.sh convert_cam_to_arl.py
-#    on Mac: >>./milab_mac.sh convert_cam_to_arl.py
+#    on Unix: >>./milab.sh convert_cam_to_arl.jpy
+#    on Mac: >>./milab_mac.sh convert_cam_to_arl.jpy
 
+# Set winter years
+winter_dir = '07-08'  # directory extension for winter year
+winter_file = '0708'  # file extension for winter year
 
 # Set data folders
-indatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/no_rotation/full_workflow_TEST_1/'
-outdatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/no_rotation/full_workflow_TEST_1/'
+indatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/winter_' + winter_dir
+outdatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/winter_' + winter_dir
 
 # Read the input netCDF data files
-in_file = addfile(os.path.join(indatadir, 'pi_3h_0809.nc'))
+in_file = addfile(os.path.join(indatadir, 'pi_3h_' + winter_file + '.nc'))
 print 'opened netcdf' 
 
 # Touch the output file without writing to it:
-out_filename = os.path.join(outdatadir, "pi_3h_0809.arl")
+out_filename = os.path.join(outdatadir, 'pi_3h_' + winter_file + '.arl')
 open(out_filename, 'a').close();
 
 # input variable names in netcdf  # NOT USED
