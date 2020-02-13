@@ -295,7 +295,7 @@ class WinterCAM:
             ds4 = xr.open_dataset(nc_file_path)
 
             # Map h1 through h4 to ds1 through ds4
-            self.h_to_d = {'h1': d1, 'h2': d2, 'h3': d3, 'h4': d4}
+            self.h_to_d = {'h1': ds1, 'h2': ds2, 'h3': ds3, 'h4': ds4}
         else:
             # Only activated when running nosetests
             nc_file_path = os.path.join(os.path.dirname(os.path.abspath(
