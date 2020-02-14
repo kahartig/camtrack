@@ -330,7 +330,7 @@ class WinterCAM:
         #   for variable in variables_to_plot:
 
 
-def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_bounds, landfrac_min=0.9, testing=False):
+def subset_nc(filename, winter_idx, desired_variable_key, lat_bounds, lon_bounds, landfrac_min=0.9, testing=False):
     '''
     Take a subset in time and lat/lon of the variable specified by
     desired_variable_key from filename and mask by landfraction. The time subset
@@ -348,9 +348,10 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
     desired_variable_key: string
         key of variable to be subset by time, latitude, and longitude
         the corresponding data must have the dimensions data[time, lat, lon]
-    lat_lower_bound: integer or float
-        lower bound of latitude range for the subset; upper bound is North Pole
-        latitude subset = [lat_lower_bound, 90.0]
+    lat_bounds: array-like of floats
+        lower and upper bounds of latitude range for the subset
+        must be in the order (lower bound, upper bound)
+        latitude subset = [lat_bounds[0], lat_bounds[1]]
     lon_bounds: array-like of floats
         lower and upper bounds of longitude range for the subset
         must be in the order (lower bound, upper bound)
@@ -367,7 +368,7 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
     -------
     subset_dict: dictionary
         'data': a subset from time=Dec 1st - Feb 28th,
-            latitude=[lat_lower_bound, 90.0],
+            latitude=[lat_bounds[0], lat_bounds[1]],
             longitude=[lon_bounds[0], lon_bounds[1]] of the variable
             desired_variable_key, masked by landfraction so that any points with
             landfraction < landfrac_min have a value of np.nan
@@ -399,7 +400,7 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
 
     # index slices for time, lat, and lon
     time_subset = slice_dim(nc_file, 'time', min_time, max_time)
-    lat_subset = slice_dim(nc_file, 'lat', lat_lower_bound)
+    lat_subset = slice_dim(nc_file, 'lat', lat_bounds[0], lat_bounds[1])
     lon_subset = slice_dim(nc_file, 'lon', lon_bounds[0], lon_bounds[1])
 
     # subset data by time, lat, and lon
@@ -411,7 +412,7 @@ def subset_nc(filename, winter_idx, desired_variable_key, lat_lower_bound, lon_b
         desired_variable_key))
     print('    time: {:04d}-{:02d}-{:02d} to {:04d}-{:02d}-{:02d}'.format(datetime_min.year,
           datetime_min.month, datetime_min.day, datetime_max.year, datetime_max.month, datetime_max.day))
-    print('    latitude: {:+.1f} to {:+.1f}'.format(lat_lower_bound, 90.0))
+    print('    latitude: {:+.1f} to {:+.1f}'.format(lat_bounds[0], lat_bounds[1]))
     print(
         '    longitude: {:+.1f} to {:+.1f}'.format(lon_bounds[0], lon_bounds[1]))
     variable_subset = variable_object[time_subset, lat_subset, lon_subset].data
