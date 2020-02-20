@@ -114,28 +114,28 @@ def test_traj_winter_badformat():
 #####################################
 def test_subset_corners():
     var_key = 'PS'
-    lat_min = 85 # should pull (86.2, 88.1, 90)
+    lat_bounds = (85, 90) # should pull (86.2, 88.1, 90)
     lon_bounds = (322, 328) # should pull (322.5, 325 , 327.5)
-    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
+    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_bounds, lon_bounds, testing=True)
     assert_allclose(output['unmasked_data'][0,0,0], PS_SUBSET_FIRST_VALUE)
     assert_allclose(output['unmasked_data'][-1,-1,-1], PS_SUBSET_LAST_VALUE)
 
 def test_subset_dimension_slices():
     var_key = 'PS'
-    lat_min = 84
+    lat_bounds = (84, 90)
     lon_bounds = (323, 328)
     expected_lats = np.array([84.31578947, 86.21052632, 88.10526316, 90])
     expected_lons = np.array([325. , 327.5])
-    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
+    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_bounds, lon_bounds, testing=True)
     assert_allclose(output['lat'], expected_lats)
     assert_allclose(output['lon'], expected_lons)
     assert_allclose(output['unmasked_data'].shape, [len(output['time']), len(output['lat']), len(output['lon'])])
 
 def test_landfrac_masking():
     var_key = 'TREFHT'
-    lat_min = 81
+    lat_bounds = (81, 90)
     lon_bounds = (321, 330)
-    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_min, lon_bounds, testing=True)
+    output = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, var_key, lat_bounds, lon_bounds, testing=True)
     assert_equal(np.sum(~np.isnan(output['data'])), GRIDPOINTS_ON_LAND*LENGTH_OF_TIMES_DIMENSION)
     last_unmasked_value = output['data'][np.where(~np.isnan(output['data']))][-1]
     assert_allclose(last_unmasked_value, T2M_LAST_LAND_VALUE)
