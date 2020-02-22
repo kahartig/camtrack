@@ -148,8 +148,7 @@ class ClimateAlongTrajectory:
         list_of_variables.append(xr.DataArray(self.trajectory['height (m)'].values, name='HEIGHT', attrs=height_attrs, dims=('time'), coords=time_coord))
         for key in trajectories.diag_var_names:
             key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
-            key_name = 'diag_' + key
-            list_of_variables.append(xr.DataArray(self.trajectory[key].values, name=key_name, attrs=key_attrs, dims=('time'), coords=time_coord))
+            list_of_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
         
         self.data = xr.merge(list_of_variables)
 
