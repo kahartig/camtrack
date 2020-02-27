@@ -76,7 +76,7 @@ class ClimateAlongTrajectory:
         trajectory path or nearest-neighbor equivalent using CAM coordinates
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, pressure_levels, interpolation):
         '''
         Parameters
         ----------
@@ -89,6 +89,10 @@ class ClimateAlongTrajectory:
             is retrieved with trajectories.data.loc[trajectory_number]
         variables: list of strings
             list of CAM variables (field names in all caps) that will be stored
+        pressure_levels: array-like of floats
+            pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
+        interpolation: 'nearest' or 'linear'
+            interpolation method for matching trajectory lat-lon to CAM variables
         '''
         # Check that all requested variables exist in CAM files
         # QUESTION: should this check against the list of actual variables in
@@ -126,6 +130,28 @@ class ClimateAlongTrajectory:
         traj_lon = xr.DataArray(
             self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
+        # Set up interpolation to pressure levels for 3-D variables:
+        #    set up subset to trajectory path        
+        lat_pad = 1.1 * max(abs(np.diff(traj_lat.values)))
+        lon_pad = 1.1 * max(abs(np.diff(traj_lon.values)))
+        lat_slice = slice(min(traj_lat.values) - lat_pad, max(traj_lat.values) + lat_pad)
+        lon_slice = slice(min(traj_lon.values) - lon_pad, max(traj_lon.values) + lon_pad)
+        time_slice = traj_lat['time'].values
+        #    extract hybrid and pressure level information from CAM files
+        #    note that all WinterCAM Datasets have P0, hyam, hybm
+        p0 = winter_file.h_to_d['h1']['P0'].values.item()
+        hyam = winter_file.h_to_d['h1']['hyam'].values
+        hybm = winter_file.h_to_d['h1']['hybm'].values
+        #    check length of pressure_levels:
+        if len(pressure_levels) < len(hyam):
+            print('WARNING:    The number of pressure levels given, {}, is less \
+                 than the number of hybrid levels in the CAM data, {}. There may \
+                 be unnecessary loss of information when interpolating to \
+                 pressure levels as a result.'.format(len(pressure_levels), len(hyam)))
+        pressure_levels_mb = pressure_levels/100 # required by Ngl.vinth2p
+        interp_type = 1 # for Ngl.vinth2p; 1=linear, 2=log, 3=log-log
+        extrapolate = True # for Ngl.vinth2p
+
         # Map trajectory times to climate variables
         # xarray supports vectorized indexing across multiple dimensions
         # (pulling a series of points by matching up lists of each coordinate)
@@ -135,13 +161,35 @@ class ClimateAlongTrajectory:
         for key in variables:
             ds = winter_file.h_to_d[winter_file.name_to_h[key]]
             variable_data = ds[key]
-            if (variable_data.dims == ('time', 'lat', 'lon')) or (variable_data.dims == ('time', 'lev', 'lat', 'lon')):
-                values = variable_data.sel(lat=traj_lat, lon=traj_lon,
-                                           time=traj_lat['time'], method='nearest')
-                list_of_variables.append(values)
+
+            # Two-dimensional climate variables
+            if variable_data.dims == ('time', 'lat', 'lon'):
+                if interpolation == 'nearest':
+                    values = variable_data.sel(lat=traj_lat, lon=traj_lon, time=traj_lat['time'], method='nearest')
+                elif interpolation == 'linear':
+                    values = variable_data.interp(lat=traj_lat, lon=traj_lon, time=traj_lat['time'], method='linear')
+                else:
+                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(interpolation))
+
+            # Three-dimensional climate variables
+            elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
+                # Subset first to reduce interpolation time
+                subset = variable_data.sel(lat=lat_slice, lon=lon_slice, time=time_slice)
+                psurf = winter_file.h_to_d[winter_file.name_to_h['PS']]['PS'].sel(lat=lat_slice, lon=lon_slice, time=time_slice).values
+                # Interpolate onto pressure levels and save as DataArray
+                on_pressure_levels = Ngl.vinth2p(subset.values, hyam, hybm, pressure_levels_mb, psurf, interp_type, p0, 1, extrapolate)
+                da_on_pressure_levels = xr.DataArray(on_pressure_levels, name=key, dims=('time', 'pres', 'lat', 'lon'), coords={'time': subset['time'].values,'pres': pressure_levels,'lat':subset['lat'].values,'lon': subset['lon'].values}, attrs=subset.attrs)
+                if interpolation == 'nearest':
+                    values = da_on_pressure_levels.sel(time=traj_lat['time'], pres=da_on_pressure_levels.pres, lat=traj_lat, lon=traj_lon, method='nearest')
+                elif interpolation == 'linear':
+                    values = da_on_pressure_levels.interp(time=traj_lat['time'], pres=da_on_pressure_levels.pres, lat=traj_lat, lon=traj_lon, method='linear')
+                else:
+                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(interpolation))
+
             else:
                 raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) for line plot or (time, lev, lat, lon) for contour plot'.format(
                     key, variable_data.dims))
+            list_of_variables.append(values)
 
         # Store height and diagnostic output variables as well
         height_attrs = {'units': 'm above ground level', 'long_name': 'Parcel height above ground level'}
