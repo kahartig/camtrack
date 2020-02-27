@@ -127,8 +127,8 @@ class TrajectoryFile:
 
         # Header 3
         #    col 0 - number (n) of diagnostic output variables
-        # col 1+ - label identification of each of n variables (PRESSURE,
-        # THETA, ...)
+        #    col 1+ - label identification of each of n variables (PRESSURE,
+        #             AIR_TEMP, ...)
         header_3 = file.readline()
         header_3 = header_3.strip().split()
         nvars = int(header_3[0])  # number of diagnostic variables
@@ -164,6 +164,9 @@ class TrajectoryFile:
         trajectories = pd.read_csv(filepath, delim_whitespace=True, header=None, names=traj_columns, index_col=[
                                    0, 8], dtype=traj_dtypes, skiprows=traj_skiprow)
         trajectories.sort_index(inplace=True)
+
+        # convert longitudes from -180 to 180 to 0 to 360 scale for consistency with CAM files
+        trajectories.mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
 
         # new column: datetime string
         def traj_datetime(row):
