@@ -29,6 +29,9 @@ import calendar
 import matplotlib.path as mpath
 from matplotlib.cm import get_cmap
 
+# NCL/NGL imports
+import Ngl
+
 # Scipy imports
 #from scipy.interpolate import griddata
 #from scipy.interpolate import RegularGridInterpolator as interpolator
