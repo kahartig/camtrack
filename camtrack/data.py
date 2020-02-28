@@ -166,7 +166,7 @@ class TrajectoryFile:
         trajectories.sort_index(inplace=True)
 
         # convert longitudes from -180 to 180 to 0 to 360 scale for consistency with CAM files
-        trajectories.mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
+        trajectories['lon'].mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
 
         # new column: datetime string
         def traj_datetime(row):
