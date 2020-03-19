@@ -594,7 +594,7 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         # Output trajectory file path:
         f.write(traj_dir + '\n')
         # Output trajectory file name:
-        f.write('traj_event{}.traj\n'.format(event_ID))
+        f.write('traj_event{:02d}.traj\n'.format(event_ID))
 
 def winter_string(numerical_time, out_format):
     '''
