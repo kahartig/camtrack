@@ -7,6 +7,7 @@ Functions:
     trajectory_path_plots: for each event, plot all trajectory paths in North Polar Stereo, colored by initial height
     line_plots_by_event: for each event, plot 2-D climate variables sampled along trajectory paths at all heights
     line_plots_by_trajectory: for each initial trajectory height, plot 2-D climate variables sampled along trajectory path for all events
+    contour_plots:  for each event, plot contours of 3-D climate variables interpolated onto the path of a given trajectory
 """
 
 def trajectory_path_plots(num_events, traj_dir, save_dir):
@@ -87,7 +88,7 @@ def trajectory_path_plots(num_events, traj_dir, save_dir):
         plt.close()
         print('Finished saving trajectory path for event {}'.format(event_ID))
 
-def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, custom_variables, traj_dir, cam_dir, save_dir):
+def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, custom_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
     '''
     For each event index from 0 to num_events-1, generate line plots of climate
     variables along all trajectories
@@ -116,6 +117,13 @@ def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, cus
     custom_variables: list-like of strings
         list of variables to plot with hard-coded special plotting instructions
         currently supported: 'Net cloud forcing'
+    pressure_levels: array-like of floats
+        list of pressures, in Pa, to interpolate onto. Note that the length of
+        pressure_levels should be at least equal to the number of hybrid levels
+        in CAM, otherwise there will be unnecessary loss of information during
+        the interpolation
+    interp_method: 'nearest' or 'linear'
+        interpolation method for matching trajectory lat-lon to CAM variables
     traj_dir: path-like or string
         path to directory where trajectory files are stored
     cam_dir: path-like or string
@@ -136,10 +144,10 @@ def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, cus
         camfile = ct.WinterCAM(cam_dir, trajfile)
         for traj_number in range(1, num_traj + 1):
             print('  Loading trajectory {}...'.format(traj_number))
-            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables))
+            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, pressure_levels, interp_method))
 
         # Initialize figure
-        num_plots = len(var_to_plot)
+        num_plots = len(cam_variables + traj_variables + custom_variables)
         time = all_trajectories[0].trajectory.index.values # assuming all trajs have same age
 
         # Set up coloring by height
@@ -181,15 +189,15 @@ def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, cus
 
         print('Finished event {}\n'.format(event_ID))
 
-def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables, custom_variables, traj_dir, cam_dir, save_dir):
+def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables, custom_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
     '''
     For each trajectory number from 1 to num_traj, generate line plots of
     climate variables across all events.
 
-    Saves 1 .png figure trajectory number. Each figure is a column of subplots,
-    each subplot corresponding to a different variable in cam_variables,
-    traj_variables, and custom_variables. Thin lines are from individual
-    trajectories, thick lines are averages across all events.
+    Saves 1 .png figure per trajectory number. Each figure is a column of
+    subplots, each subplot corresponding to a different variable in
+    cam_variables, traj_variables, and custom_variables. Thin lines are from
+    individual trajectories, thick lines are averages across all events.
 
     Parameters
     ----------
@@ -210,6 +218,13 @@ def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables
     custom_variables: list-like of strings
         list of variables to plot with hard-coded special plotting instructions
         currently supported: 'Net cloud forcing'
+    pressure_levels: array-like of floats
+        list of pressures, in Pa, to interpolate onto. Note that the length of
+        pressure_levels should be at least equal to the number of hybrid levels
+        in CAM, otherwise there will be unnecessary loss of information during
+        the interpolation
+    interp_method: 'nearest' or 'linear'
+        interpolation method for matching trajectory lat-lon to CAM variables
     traj_dir: path-like or string
         path to directory where trajectory files are stored
     cam_dir: path-like or string
@@ -230,11 +245,11 @@ def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables
             traj_path = os.path.join(traj_dir, 'traj_event{:02d}.traj'.format(event_ID))
             trajfile = ct.TrajectoryFile(traj_path)
             camfile = ct.WinterCAM(cam_dir, trajfile)
-            all_events.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables))
+            all_events.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, pressure_levels, interp_method))
 
         # Initialize figure
         print('  Generating figure...')
-        num_plots = len(var_to_plot)
+        num_plots = len(cam_variables + traj_variables + custom_variables)
         time = all_events[0].trajectory.index.values # assuming all trajs have same age
 
         plt.clf()
@@ -275,3 +290,78 @@ def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables
         plt.close()
 
         print('Finished trajectory {}\n'.format(traj_number))
+
+
+def contour_plots(num_events, traj_number, cam_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
+    '''
+    For each event, generate contour plots in time and pressure of climate
+    variables for a specific trajectory.
+
+    Saves 1 .png figure per event. Each figure is a column of subplots, each
+    subplot corresponding to a different variable in cam_variables along the
+    trajectory specified by traj_number.
+
+    Parameters
+    ----------
+    num_events: integer
+        number of events to generate line plots for
+        assuming each .traj file is named 'traj_event<event idx>.traj':
+            event index of 2 -> 'traj_event02.traj'
+    traj_number: integer
+        specifies which trajectory to plot from each event
+    cam_variables: list-like of strings
+        list of CAM variables to plot
+        must correpond to 2-D variables with dimensions (time, lat, lon)
+    pressure_levels: array-like of floats
+        list of pressures, in Pa, to interpolate onto. Note that the length of
+        pressure_levels should be at least equal to the number of hybrid levels
+        in CAM, otherwise there will be unnecessary loss of information during
+        the interpolation
+    interp_method: 'nearest' or 'linear'
+        interpolation method for matching trajectory lat-lon to CAM variables
+    traj_dir: path-like or string
+        path to directory where trajectory files are stored
+    cam_dir: path-like or string
+        path to directory where winter CAM files are stored
+    save_dir: path-like or string
+        path to directory where trajectory plots will be saved
+        output file name format is 'traj_plot_event<event idx>.png'
+    '''
+    for event_ID in range(0, num_events):
+        print('Starting event {}'.format(event_ID))
+        # Generate save file path
+        save_file_path = os.path.join(save_dir, 'contour_plot_event{:02d}.png'.format(event_ID))
+
+        # Load trajectory for the event
+        traj_path = os.path.join(traj_dir, 'traj_event{:d}.traj'.format(event_ID))
+        trajfile = ct.TrajectoryFile(traj_path)
+        camfile = ct.WinterCAM(cam_dir, trajfile)
+        cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, pressure_levels, interp_method)
+        time = cat.trajectory.index.values
+        pres = cat.data.pres.values
+        mesh_time, mesh_pres = np.meshgrid(time, pres)
+
+        # Initialize figure
+        num_plots = len(cam_variables)
+        fig = plt.figure()
+        fig.set_figheight(6 * num_plots)
+        fig.set_figwidth(8)
+        cm = plt.get_cmap('viridis')
+        num_contours = 15
+
+        for idx, variable in enumerate(cam_variables):
+            var_label = '{} ({})'.format(cat.data[variable].long_name, cat.data[variable].units)
+            ax = fig.add_subplot(num_plots, 1, idx + 1)
+            ax.set_xlabel('Trajectory Age (hours)')
+            ax.set_ylabel('Pressure (Pa)')
+            ax.set_ylim(max(pres), min(pres))
+            contour_data = np.transpose(cat.data[variable].values)
+            contour = plt.contourf(mesh_time, mesh_pres, contour_data, num_contours, cmap=cm)
+            plt.colorbar(ax=ax, shrink=0.6, pad=0.02, label=var_label)
+            plt.title('{} along Trajectory'.format(variable))
+
+        plt.tight_layout(h_pad=2.0)
+        plt.savefig(save_file_path)
+        plt.close()
+
+        print('Finished event {}\n'.format(event_ID))
