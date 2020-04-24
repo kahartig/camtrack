@@ -32,13 +32,13 @@ print 'opened netcdf'
 out_filename = os.path.join(outdatadir, 'pi_3h_' + winter_file + '.arl')
 open(out_filename, 'a').close();
 
-# input variable names in netcdf  # NOT USED
-#nc_varnames_2d = ['PS']
-#nc_varnames_3d = ['T','U','V','OMEGA']
-
-# corresponding output variable names in arl
-arl_varnames_2d = ['PRSS']
-arl_varnames_3d = ['TEMP','UWND','VWND','WWND']
+# Map CAM variables to ARL variables
+#    Surface variables:
+varmap_2d = {'PS': 'PRSS', 'TREFHT': 'T02M'}
+unitmap_2d = {'PS': 0.01, 'TREFHT': 1.}
+#    Full domain variables:
+varmap_3d = {'T': 'TEMP', 'U': 'UWND', 'V': 'VWND', 'OMEGA': 'WWND', 'Z3': 'HGTS', 'RELHUM': 'RELH'}
+unitmap_3d = {'T': 1., 'U': 1., 'V': 1., 'OMEGA': 0.01, 'Z3': 1., 'RELHUM': 1.}
 
 # dimensions of (3-D) input netCDF variables
 sample_variable = in_file['U']  # sample variable for calculating dimensions and levels
@@ -49,7 +49,6 @@ level_index = 1
 nx = sample_variable.dimlen(lon_index)  # longitude
 ny = sample_variable.dimlen(lat_index)  # latitude
 nz = sample_variable.dimlen(level_index)  # vertical level
-#levels = sample_variable.dimvalue(level_index)
 
 # convert vertical level coefficients to ECMWF-format levels
 hyam = in_file['hyam'][:]
@@ -92,31 +91,25 @@ for t in range(0, num_times):
     full_data_record = []
 
     # Write 2-D Variables: surface pressure
-    surface_data_record = []
-    psurf = in_file['PS'][t,:,:] * 0.01  # unit conversion from Pa to hPa
-    single_data_record = temp_file.writedatarec(timestamp, 0, 'PRSS', fhour, 99, psurf)  # write surface level (index 0)
-    surface_data_record.append(single_data_record)
+    for camkey,arlkey in varmap_2d.items():
+        surface_data_record = []
+        variable = in_file[camkey][t, :, :] * unitmap_2d[camkey]
+        single_data_record = temp_file.writedatarec(timestamp, 0, arlkey, fhour, 99, variable)  # write surface level (index 0)
+        surface_data_record.append(single_data_record)
     full_data_record.append(surface_data_record)
 
     # Write 3-D Variables
     #    loop over level indices in reverse order
     #    CAM levels run TOA -> surface but HYSPLIT is expecting surface -> TOA
+    #    write to ARL in reverse order: level index nz-1 (surface) -> level 1 (surface) and 0 (TOA) -> nz (TOA)
     for idx_lev in range(nz-1, -1, -1):
         level_data_record = []
-        temp = in_file['T'][t,idx_lev,:,:]  # input K, output K
-        uwnd = in_file['U'][t,idx_lev,:,:] #input m/s, output m/s
-        vwnd = in_file['V'][t,idx_lev,:,:] # input m/s, output m/s
-        wwnd = in_file['OMEGA'][t,idx_lev,:,:] * 0.01 # input Pa/s, output hPa/s
-        # write to ARL in reverse order: level index nz-1 (surface) -> level 1 (surface) and 0 (TOA) -> nz (TOA)
-        single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, 'TEMP', fhour, 99, temp)
-        level_data_record.append(single_data_record)
-        single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, 'UWND', fhour, 99, uwnd)
-        level_data_record.append(single_data_record)
-        single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, 'VWND', fhour, 99, vwnd)
-        level_data_record.append(single_data_record)
-        single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, 'WWND', fhour, 99, wwnd)
-        level_data_record.append(single_data_record)
+        for camkey,arlkey in varmap_3d.items():
+            variable = in_file[camkey][t, idx_lev, :, :] * unitmap_3d[camkey]
+            single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, arlkey, fhour, 99, variable)
+            level_data_record.append(single_data_record)
         full_data_record.append(level_data_record)
+
     # Re-write index record with data record
     temp_file.writeindexrec(timestamp, data_header, full_data_record)
     temp_file.close()
