@@ -57,7 +57,7 @@ class TrajectoryFile:
     direction: string
         direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
     data: pandas DataFrame
-        trajectory data
+        trajectory data every 3 hours
         uses a MultiIndex:
             top level: int from 1 to ntraj
                 trajectory number 'traj #'
@@ -71,6 +71,12 @@ class TrajectoryFile:
             datetime: str; 'YYYY-MM-DD HH:MM:SS'
             cftime date: cftime.DatetimeNoLeap()
             numerical time: float; days since 0001-01-01 00:00:00
+    data_1h: pandas DataFrame
+        same as data, but every hour
+    data_12h: pandas DataFrame
+        same as data, but every 12 hours
+    data_24h: pandas DataFrame
+        same as data, but every 24 hours
     '''
 
     def __init__(self, filepath):
@@ -188,7 +194,12 @@ class TrajectoryFile:
         trajectories['numerical time'] = trajectories.apply(
             traj_numtime, axis=1)
 
-        self.data = trajectories
+        # Store trajectories in increments of 1 hour, 3 hours, 12, and 24
+        # default self.data will be every 3 hours to match CAM output frequency
+        self.data_1h = trajectories
+        self.data = trajectories[trajectories['hour'] % 3 == 0] # every 3 hours
+        self.data_12h = trajectories[trajectories['hour'] % 12 == 0]
+        self.data_24h = trajectories[trajectories['hour'] % 24 == 0]
 
     def winter(self, out_format):
         '''
