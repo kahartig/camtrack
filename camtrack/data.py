@@ -323,7 +323,7 @@ class WinterCAM:
         '''
         return self.dataset[key]
 
-    def interpolate(self, variable_da, pressure_levels, interpolation='linear', extrapolate=False):
+    def interpolate(self, variable_da, pressure_levels, interpolation='linear', extrapolate=False, fill_value=np.nan):
         '''
         Interpolate data from CAM hybrid levels onto pressure levels
 
@@ -343,6 +343,10 @@ class WinterCAM:
             if True, extrapolation is permitted even when a pressure level is
             beyond the range of the surface pressure.
             Default is False
+        fill_value: float or NaN
+            if extrapolate=True, replaces values outside of extrapolation range
+            (where pressure_levels is beyond the range allowed by surface
+            pressure)
 
         Returns
         -------
@@ -395,7 +399,22 @@ class WinterCAM:
         p_surf = self.variable('PS').sel(time=time_slice, lat=lat_slice, lon=lon_slice).values
         
         # Interpolate onto pressure levels
+        replacement_threshold = 1e29
+        if (not extrapolate) and (np.any(variable_da.values >= replacement_threshold)):
+            raise ValueError('Some values in the data array are larger than the\
+                threshold used to identify and replace extrapolated data ({}).\
+                Either set extrapolate=True or scale down the input array by a\
+                few order of magnitude before interpolating'.format(
+                    replacement_threshold))
+
         on_p_levels = Ngl.vinth2p(variable_da.values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
+        
+        # If extrapolation is False, replace default fill value
+        # (1e30 > replacement_threshold) with designated fill_value
+        if not extrapolate:
+            on_p_levels = on_p_levels.where(on_p_levels < replacement_threshold, fill_value)
+        
+        # Bundle into a DataArray
         variable_da_on_p_levels = xr.DataArray(on_p_levels,
             name=variable_da.name,
             dims=('time', 'pres', 'lat', 'lon'),
