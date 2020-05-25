@@ -28,6 +28,7 @@ from netCDF4 import Dataset
 import os
 import cftime
 import calendar
+import Ngl
 
 
 class TrajectoryFile:
@@ -248,41 +249,40 @@ class WinterCAM:
     '''
 
     # Map CAM variable names to h1 through h4 files
-    # QUESTION: should this be pulled from the CAM files themselves? something
-    # to consider...
-    name_to_h = dict.fromkeys(['CLDHGH', 'CLDICE', 'CLDLIQ', 'CLDLOW', 'CLDMED',
-                               'CLDTOT', 'CLOUD', 'CONCLD', 'FICE', 'ICIMR', 'ICLDIWP', 'ICLDTWP', 'ICWMR',
-                               'Q', 'QFLX', 'QREFHT', 'RELHUM', 'SFCLDICE', 'SFCLDLIQ', 'TGCLDCWP',
-                               'TGCLDIWP', 'TGCLDLWP', 'TMQ'], 'h1')
-    name_to_h.update(dict.fromkeys(['FLDS', 'FLDSC', 'FLNS', 'FLNSC', 'FLNT',
-                                    'FLNTC', 'FLUT', 'FLUTC', 'FSDS', 'FSDSC', 'FSDTOA', 'FSNS', 'FSNSC', 'FSNT',
-                                    'FSNTC', 'FSNTOA', 'FSNTOAC', 'FSUTOA', 'LHFLX', 'LWCF', 'QRL', 'QRS', 'SHFLX',
-                                    'SOLIN', 'SWCF'], 'h2'))
-    name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
-                                    'PRECL', 'PRECT', 'PS', 'PSL', 'SNOWHICE', 'SNOWHLND', 'TAUX', 'TAUY', 'U',
-                                    'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
-    name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
-                                    'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
+    # name_to_h = dict.fromkeys(['CLDHGH', 'CLDICE', 'CLDLIQ', 'CLDLOW', 'CLDMED',
+    #                            'CLDTOT', 'CLOUD', 'CONCLD', 'FICE', 'ICIMR', 'ICLDIWP', 'ICLDTWP', 'ICWMR',
+    #                            'Q', 'QFLX', 'QREFHT', 'RELHUM', 'SFCLDICE', 'SFCLDLIQ', 'TGCLDCWP',
+    #                            'TGCLDIWP', 'TGCLDLWP', 'TMQ'], 'h1')
+    # name_to_h.update(dict.fromkeys(['FLDS', 'FLDSC', 'FLNS', 'FLNSC', 'FLNT',
+    #                                 'FLNTC', 'FLUT', 'FLUTC', 'FSDS', 'FSDSC', 'FSDTOA', 'FSNS', 'FSNSC', 'FSNT',
+    #                                 'FSNTC', 'FSNTOA', 'FSNTOAC', 'FSUTOA', 'LHFLX', 'LWCF', 'QRL', 'QRS', 'SHFLX',
+    #                                 'SOLIN', 'SWCF'], 'h2'))
+    # name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
+    #                                 'PRECL', 'PRECT', 'PS', 'PSL', 'SNOWHICE', 'SNOWHLND', 'TAUX', 'TAUY', 'U',
+    #                                 'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
+    # name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
+    #                                 'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
 
-    def __init__(self, file_dir, trajectories, nosetest=False):
+    def __init__(self, file_dir, trajectories=None):
         '''
         Parameters
         ----------
         file_dir: string
-            parent directory of CAM files
-            assumes CAM file names within file_dir are in the format
-            'pi_3h_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
+            if trajectories is None:
+                full path to a netCDF file
+            if trajectories is not None:
+                path to directory containing CAM files
+                assumes CAM file names within file_dir are in the format
+                'pi_3h_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
         trajectories: TrajectoryFile instance
-            a family of trajectories that start at the same place and time. CAM
-            files are stored that correspond to the year(s) associated with
-            these trajectories
-        nosetest: boolean
-            if True, ignore file_dir and load a sample CAM file from package's
-                test directory for running nosetests
-            Default is False
+            if None, then use file_dir as full path of netCDF file to load
+            if not None, must be a family of trajectories that start at the same
+                place and time. CAM files are loaded that correspond to the
+                year(s) associated with these trajectories
         '''
         # Open the CAM files with xarray
-        if not nosetest:
+        if trajectories is not None:
+            # Read in h1, h2, h3, and h4 for the winter corresponding to trajectories
             winter_str = trajectories.winter(out_format='firstsecond')
             nc_file_path = os.path.join(
                 file_dir, 'pi_3h_' + winter_str + '_h1.nc')
@@ -296,41 +296,107 @@ class WinterCAM:
             nc_file_path = os.path.join(
                 file_dir, 'pi_3h_' + winter_str + '_h4.nc')
             ds4 = xr.open_dataset(nc_file_path)
+            self.dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
 
-            # Map h1 through h4 to ds1 through ds4
-            self.h_to_d = {'h1': ds1, 'h2': ds2, 'h3': ds3, 'h4': ds4}
+            # # Map h1 through h4 to ds1 through ds4
+            # self.h_to_d = {'h1': ds1, 'h2': ds2, 'h3': ds3, 'h4': ds4}
         else:
-            # Only activated when running nosetests
-            nc_file_path = os.path.join(os.path.dirname(os.path.abspath(
-                __file__)), 'tests', 'sample_CAM4_for_nosetests.nc')
-            ds1 = xr.open_dataset(nc_file_path)
-            self.h_to_d = dict.fromkeys(['h1', 'h2', 'h3', 'h4'], ds1)
+            # Read in a single netCDF file
+            self.dataset = xr.open_dataset(file_dir)
 
         # Lists of coordinate variables
-        # time = np.array(ds1['time'][:])
-        self.lat = np.array(ds1['lat'][:])
-        self.lon = np.array(ds1['lon'][:])
-        # self.lev = np.array(ds1['lev'][:])
+        # time = np.array(self.dataset['time'][:])
+        self.lat = np.array(self.dataset['lat'][:])
+        self.lon = np.array(self.dataset['lon'][:])
+        # self.lev = np.array(self.dataset['lev'][:])
 
-    # def plot_2d_animation(self, events_df, variables_to_plot, window,
-    # save_dir):
+    def variable(self, key):
         '''
-        DOC
-        events_df: pandas DataFrame
-            all events to plot
-            indexed by event #
-            includes columns: cftime date, lat, lon
-        variables_to_plot: list of CAM variable names; must be 2-D
-            later, should add capability of pulling a specific level of 3-D var
-        window: dictionary with 'delta t', 'delta lat', 'delta lon' entries
-        save_dir: path for directory in which to save animation frames
-            save_dir/
-                event_<idx>/
-                    <variable 1 name>/
-                        time_index_???.png
+        Return DataArray for the variable named 'key'
         '''
-        # for idx, row in events_df.iterrows():
-        #   for variable in variables_to_plot:
+        return self.dataset[key]
+
+    def interpolate(self, variable_da, pressure_levels, interpolation='linear', extrapolate=False):
+        '''
+        Interpolate data from CAM hybrid levels onto pressure levels
+
+        Parameters
+        ----------
+        variable_da: xarray.DataArray
+            data in three spatial dimensions + time, where the vertical spatial
+            dimension 'lev' is CAM hybrid levels and runs from top-of-atmosphere
+            to surface
+        pressure_levels: array-like
+            one-dimensional array of pressure levels, in Pa, to interpolate onto
+        interpolation: string
+            interpolation method. Options are 'linear', 'log', and 'log-log'.
+            Default is 'linear'
+        extrapolate: boolean
+            if True, extrapolation is permitted even when a pressure level is
+            beyond the range of the surface pressure.
+            Default is False
+
+        Returns
+        -------
+        variable_da_on_p_levels: xarray.DataArray
+            variable data interpolated from hybrid levels onto pressure levels
+            using PyNGL's vinth2p interpolation function.
+            Has dimensions ('time', 'pres', 'lat', 'lon') where the coordinates
+            of 'pres' were given in pressure_levels
+
+        '''
+        # Check nc files for required variables
+        required_variables = ['P0', 'hyam', 'hybm', 'PS']
+        for key in required_variables:
+            if key not in self.dataset.data_vars:
+                raise KeyError('WinterCAM file is missing variable {}, which is\
+                    required for interpolation.'.format(key))
+
+        # Check that variable has 3 spatial dimensions
+        required_dims = ('time', 'lev', 'lat', 'lon')
+        if variable_da.dims != required_dims:
+            raise ValueError('Variable DataArray has dimensions {}; must have \
+                dimensions {} for interpolation onto pressure levels'.format(
+                    variable_da.dims, required_dims))
+
+        # Determine range of variable data
+        time_slice = variable_da.time
+        lat_slice = variable_da.lat
+        lon_slice = variable_da.lon
+
+        # Extract hybrid level information from CAM files
+        p_0_mb = self.variable('P0').values.item()/100 # p0 must be in mb
+        hyam = self.variable('hyam').values
+        hybm = self.variable('hybm').values
+        if len(pressure_levels) < len(hyam):
+            print('WARNING:    The number of pressure levels given, {}, is less \
+                than the number of hybrid levels in the CAM data, {}. There may \
+                be unnecessary loss of information when interpolating to \
+                pressure levels as a result.'.format(len(pressure_levels), len(hyam)))
+
+        # Set up interpolation arguments
+        pressure_levels_mb = pressure_levels/100 # Ngl.vinth2p requires pressure levels in mb
+        if interpolation == 'linear':
+            interp_flag = 1
+        elif interpolation == 'log':
+            interp_flag = 2
+        elif interpolation == 'log-log':
+            interp_flag = 3
+        else:
+            raise ValueError('Invalid interpolation method {}. Interpolation must be linear, log, or log-log'.format(interpolation))
+        p_surf = self.variable('PS').sel(time=time_slice, lat=lat_slice, lon=lon_slice).values
+        
+        # Interpolate onto pressure levels
+        on_p_levels = Ngl.vinth2p(variable_da.values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
+        variable_da_on_p_levels = xr.DataArray(on_p_levels,
+            name=variable_da.name,
+            dims=('time', 'pres', 'lat', 'lon'),
+            coords={'time': variable_da['time'].values,
+                    'pres': pressure_levels,
+                    'lat': variable_da['lat'].values,
+                    'lon': variable_da['lon'].values},
+            attrs=variable_da.attrs)
+        return variable_da_on_p_levels
 
 
 def subset_nc(filename, winter_idx, desired_variable_key, lat_bounds, lon_bounds, landfrac_min=0.9, testing=False):
