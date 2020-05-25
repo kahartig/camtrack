@@ -296,19 +296,27 @@ class WinterCAM:
             nc_file_path = os.path.join(
                 file_dir, 'pi_3h_' + winter_str + '_h4.nc')
             ds4 = xr.open_dataset(nc_file_path)
-            self.dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
+            dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
 
             # # Map h1 through h4 to ds1 through ds4
             # self.h_to_d = {'h1': ds1, 'h2': ds2, 'h3': ds3, 'h4': ds4}
         else:
             # Read in a single netCDF file
-            self.dataset = xr.open_dataset(file_dir)
+            dataset = xr.open_dataset(file_dir)
 
         # Lists of coordinate variables
         # time = np.array(self.dataset['time'][:])
-        self.lat = np.array(self.dataset['lat'][:])
-        self.lon = np.array(self.dataset['lon'][:])
+        # self.lat = np.array(self.dataset['lat'][:])
+        # self.lon = np.array(self.dataset['lon'][:])
         # self.lev = np.array(self.dataset['lev'][:])
+
+        # Add numerical time coordinate
+        # NOTE: time units are an assumption; cannot seem to retrieve the units
+        # directly from the cftime.DatetimeNoLeap object
+        self.time_units = 'days since 0001-01-01 00:00:00' # by assumption
+        self.time_calendar = dataset.time.item(0).calendar
+        numerical_times = cftime.date2num(dataset['time'], units=self.time_units, calendar=self.time_calendar)
+        self.dataset = dataset.assign_coords({'numerical_time': ('time', numerical_times)})
 
     def variable(self, key):
         '''
