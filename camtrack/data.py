@@ -296,22 +296,21 @@ class WinterCAM:
             nc_file_path = os.path.join(
                 file_dir, 'pi_3h_' + winter_str + '_h4.nc')
             ds4 = xr.open_dataset(nc_file_path)
-            dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
 
-            # # Map h1 through h4 to ds1 through ds4
-            # self.h_to_d = {'h1': ds1, 'h2': ds2, 'h3': ds3, 'h4': ds4}
+            # Remove variables that should conflict between files before merging
+            dropped_vars = ['time_written']
+            ds1 = ds1.drop_vars(dropped_vars, errors='ignore')
+            ds2 = ds2.drop_vars(dropped_vars, errors='ignore')
+            ds3 = ds3.drop_vars(dropped_vars, errors='ignore')
+            ds4 = ds4.drop_vars(dropped_vars, errors='ignore')
+
+            dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
         else:
             # Read in a single netCDF file
             dataset = xr.open_dataset(file_dir)
 
-        # Lists of coordinate variables
-        # time = np.array(self.dataset['time'][:])
-        # self.lat = np.array(self.dataset['lat'][:])
-        # self.lon = np.array(self.dataset['lon'][:])
-        # self.lev = np.array(self.dataset['lev'][:])
-
         # Add numerical time coordinate
-        # NOTE: time units are an assumption; cannot seem to retrieve the units
+        # NOTE: time units are an assumption; cannot retrieve the units
         # directly from the cftime.DatetimeNoLeap object
         self.time_units = 'days since 0001-01-01 00:00:00' # by assumption
         self.time_calendar = dataset.time.item(0).calendar
@@ -336,6 +335,7 @@ class WinterCAM:
             to surface
         pressure_levels: array-like
             one-dimensional array of pressure levels, in Pa, to interpolate onto
+            Can be either ascending or descending
         interpolation: string
             interpolation method. Options are 'linear', 'log', and 'log-log'.
             Default is 'linear'
