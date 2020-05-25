@@ -412,7 +412,7 @@ class WinterCAM:
         # If extrapolation is False, replace default fill value
         # (1e30 > replacement_threshold) with designated fill_value
         if not extrapolate:
-            on_p_levels = on_p_levels.where(on_p_levels < replacement_threshold, fill_value)
+            on_p_levels = np.where(on_p_levels >= replacement_threshold, fill_value, on_p_levels)
         
         # Bundle into a DataArray
         variable_da_on_p_levels = xr.DataArray(on_p_levels,
