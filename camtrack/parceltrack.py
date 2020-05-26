@@ -72,7 +72,7 @@ class ClimateAlongTrajectory:
         trajectory path or nearest-neighbor equivalent using CAM coordinates
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables, interpolation, pressure_levels=None):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, pressure_levels=None):
         '''
         Parameters
         ----------
@@ -85,7 +85,7 @@ class ClimateAlongTrajectory:
             is retrieved with trajectories.data.loc[trajectory_number]
         variables: list of strings
             list of CAM variables (field names in all caps) that will be stored
-        interpolation: 'nearest' or 'linear'
+        traj_interpolation: 'nearest' or 'linear'
             interpolation method for matching trajectory lat-lon to CAM variables
         pressure_levels: array-like of floats
             pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
@@ -129,7 +129,7 @@ class ClimateAlongTrajectory:
             time_slice = traj_time_da.values
             #    inputs for vertical interpolation function
             pressure_levels_mb = pressure_levels/100 # required by Ngl.vinth2p
-            interp_type = 1 # for Ngl.vinth2p; 1=linear, 2=log, 3=log-log
+            pres_interpolation = 'linear' # for Ngl.vinth2p; options=linear, log, log-log
             extrapolate = False # for Ngl.vinth2p
             fill_value = np.nan
 
@@ -144,24 +144,24 @@ class ClimateAlongTrajectory:
 
             # Two-dimensional climate variables
             if variable_data.dims == ('time', 'lat', 'lon'):
-                if interpolation == 'nearest':
+                if traj_interpolation == 'nearest':
                     values = variable_data.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
-                elif interpolation == 'linear':
+                elif traj_interpolation == 'linear':
                     values = variable_data.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear')
                 else:
-                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(interpolation))
+                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
 
             # Three-dimensional climate variables
             elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
                 # Subset first to reduce interpolation time
                 subset = variable_data.sel(time=time_slice, lat=lat_slice, lon=lon_slice)
-                da_on_pressure_levels = winter_file.interpolate(subset, pressure_levels, interpolation=interp_type, extrapolate=extrapolate, fill_value=fill_value)
-                if interpolation == 'nearest':
+                da_on_pressure_levels = winter_file.interpolate(subset, pressure_levels, interpolation=pres_interpolation, extrapolate=extrapolate, fill_value=fill_value)
+                if traj_interpolation == 'nearest':
                     values = da_on_pressure_levels.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
-                elif interpolation == 'linear':
+                elif traj_interpolation == 'linear':
                     values = da_on_pressure_levels.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear')
                 else:
-                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(interpolation))
+                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
 
             else:
                 raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(
