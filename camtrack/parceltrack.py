@@ -64,13 +64,6 @@ class ClimateAlongTrajectory:
     trajectory: pandas DataFrame
         3-hourly points along the trajectory, indexed by trajectory age; output
         frequency matches that of CAM file
-    trajectory_1h: pandas DataFrame
-        same as trajectory but output is every hour; the source format from
-        TrajectoryFile
-    trajectory_12h: pandas DataFrame
-        same as trajectory but output is every 12 hours
-    trajectory_24h: pandas DataFrame
-        same as trajectory but output is every 24 hours
     data: xarray Dataset
         values of 2-D and 3-D variables along the trajectory. Dimensions are
         'time' and possibly 'lev' (if there are any 3-D variables). 2-D
@@ -112,16 +105,16 @@ class ClimateAlongTrajectory:
                 raise ValueError('The requested variable {} has 3 spatial dimensions, so pressure_levels must be provided for vertical interpolation'.format(key))
         
         # Select a single trajectory
-        single_trajectory = trajectories.get_trajectory(trajectory_number)
+        self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
         self.direction = trajectories.direction
         #print('Starting position for trajectory {}:'.format(trajectory_number))
         #print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
 
         # Retrieve time, lat, lon along trajectory
-        time_coord = {'time': trajectory['cftime date'].values}
+        time_coord = {'time': self.trajectory['cftime date'].values}
         traj_time_da = xr.DataArray(time_coord['time'], dims=('time'), coords=time_coord)
-        traj_lat_da = xr.DataArray(trajectory['lat'].values, dims=('time'), coords=time_coord)
-        traj_lon_da = xr.DataArray(trajectory['lon'].values, dims=('time'), coords=time_coord)
+        traj_lat_da = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
+        traj_lon_da = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
         # Set up interpolation to pressure levels for 3-D variables:
         #    set up subset to trajectory path        

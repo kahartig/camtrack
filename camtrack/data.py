@@ -194,18 +194,18 @@ class TrajectoryFile:
         trajectories['numerical time'] = trajectories.apply(
             traj_numtime, axis=1)
 
-        # Store trajectories in increments of 1 hour, 3 hours, 12, and 24
+        # Store trajectories in increments of 1 hour and 3 hours
         # default self.data will be every 3 hours to match CAM output frequency
         self.data_1h = trajectories
         self.data = trajectories[trajectories['hour'] % 3 == 0] # every 3 hours
-        self.data_12h = trajectories[trajectories['hour'] % 12 == 0]
-        self.data_24h = trajectories[trajectories['hour'] % 24 == 0]
 
-    def get_trajectory(self, trajectory_number):
+    def get_trajectory(self, trajectory_number, hourly_interval=3):
         '''
-        Return a single trajectory using integer trajectory number
+        Return data from every hourly_interval hours for a single trajectory using integer trajectory number
         '''
-        return self.data.loc[trajectory_number]
+        single_trajectory = self.data_1h.loc[trajectory_number]
+        iseveryxhours = single_trajectory['hour'] % hourly_interval == 0
+        return single_trajectory[iseveryxhours]
 
     def col2da(self, trajectory_number, data_column, include_coords=None):
         '''
