@@ -100,10 +100,13 @@ class ClimateAlongTrajectory:
                 'One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
 
         # Check that pressure levels are provided if any 3-D variables are requested
-        for key in variables:
-            if (winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')) and (pressure_levels is None):
-                raise ValueError('The requested variable {} has 3 spatial dimensions, so pressure_levels must be provided for vertical interpolation'.format(key))
-        
+        has_3d_vars = False # True if there are any 3-D variables requested
+        if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables):
+            has_3d_vars = True
+            3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
+            if pressure_levels is None:
+                raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(3d_vars))
+    
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
         self.direction = trajectories.direction
@@ -117,18 +120,18 @@ class ClimateAlongTrajectory:
         traj_lon_da = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
         # Set up interpolation to pressure levels for 3-D variables:
-        #    set up subset to trajectory path        
-        lat_pad = 1.1 * max(abs(np.diff(traj_lat_da.values)))
-        lon_pad = 1.1 * max(abs(np.diff(traj_lon_da.values)))
-        lat_slice = slice(min(traj_lat_da.values) - lat_pad, max(traj_lat_da.values) + lat_pad)
-        lon_slice = slice(min(traj_lon_da.values) - lon_pad, max(traj_lon_da.values) + lon_pad)
-        time_slice = traj_time_da.values
-
-        # Set up interpolation onto vertical levels
-        pressure_levels_mb = pressure_levels/100 # required by Ngl.vinth2p
-        interp_type = 1 # for Ngl.vinth2p; 1=linear, 2=log, 3=log-log
-        extrapolate = False # for Ngl.vinth2p
-        fill_value = np.nan
+        if has_3d_vars:
+            #    set up subset to trajectory path        
+            lat_pad = 1.1 * max(abs(np.diff(traj_lat_da.values)))
+            lon_pad = 1.1 * max(abs(np.diff(traj_lon_da.values)))
+            lat_slice = slice(min(traj_lat_da.values) - lat_pad, max(traj_lat_da.values) + lat_pad)
+            lon_slice = slice(min(traj_lon_da.values) - lon_pad, max(traj_lon_da.values) + lon_pad)
+            time_slice = traj_time_da.values
+            #    inputs for vertical interpolation function
+            pressure_levels_mb = pressure_levels/100 # required by Ngl.vinth2p
+            interp_type = 1 # for Ngl.vinth2p; 1=linear, 2=log, 3=log-log
+            extrapolate = False # for Ngl.vinth2p
+            fill_value = np.nan
 
         # Map trajectory times to climate variables
         # xarray supports vectorized indexing across multiple dimensions
