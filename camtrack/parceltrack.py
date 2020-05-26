@@ -103,9 +103,9 @@ class ClimateAlongTrajectory:
         has_3d_vars = False # True if there are any 3-D variables requested
         if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables):
             has_3d_vars = True
-            3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
+            list_3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
             if pressure_levels is None:
-                raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(3d_vars))
+                raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(list_3d_vars))
     
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
