@@ -201,6 +201,12 @@ class TrajectoryFile:
         self.data_12h = trajectories[trajectories['hour'] % 12 == 0]
         self.data_24h = trajectories[trajectories['hour'] % 24 == 0]
 
+    def get_trajectory(self, trajectory_number):
+        '''
+        Return a single trajectory using integer trajectory number
+        '''
+        return self.data.loc[trajectory_number]
+
     def col2da(self, trajectory_number, data_column, include_coords=None):
         '''
         Convert any trajectory data column into an xarray.DataArray with
