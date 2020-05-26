@@ -73,15 +73,10 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
 		coordinate_values = list(itemgetter(*coordinate_idx)(coordinates))
 		return coordinate_values, coordinate_idx
 
-	def num2datestring(row):
-		# ASSUMES no_leap calendar, units='days since 0001-01-01 00:00:00'
-		date = cftime.num2date(row['time'], 'days since 0001-01-01 00:00:00', calendar='noleap')
-		return '{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}'.format(date.year, date.month, date.day, date.hour, date.minute, date.second)
-	
-	temperature_anomaly = climatology_dict['diff']
-	times = climatology_dict['time']
-	latitudes = climatology_dict['lat']
-	longitudes = climatology_dict['lon']
+	temperature_anomaly = climatology_dict['diff'].values
+	times = climatology_dict['diff'].time.values
+	latitudes = climatology_dict['diff'].lat.values
+	longitudes = climatology_dict['diff'].lon.values
 
 	# Sort by temperature anomaly, from coldest (most negative) to warmest (most positive and NaN)
 	sorted_idx = np.unravel_index(temperature_anomaly.argsort(axis=None), temperature_anomaly.shape)
@@ -102,10 +97,12 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
 	sample_lon, sample_lon_idx = samples2values(samples, sorted_idx[2], longitudes)
 	sample_temp_anomaly = [temperature_anomaly[t, la, lo] for t,la,lo in zip(sample_times_idx, sample_lat_idx, sample_lon_idx)]
 
-	# Construct cold_events DataFrame
-	cold_events = pd.DataFrame.from_dict({'time': sample_times, 'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
-	cold_events['date'] = cold_events.apply(num2datestring, axis=1)
+	# Convert sampled times to numerical time and datestring
+	numerical_times = cftime.date2num(sample_times, 'days since 0001-01-01 00:00:00', calendar='noleap')
+	datestrings = [t.strftime() for t in sample_times]
 
+	# Construct cold_events DataFrame
+	cold_events = pd.DataFrame.from_dict({'time': numerical_times, 'date': datestrings, 'cftime date': sample_times, 'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
 	print("Randomly sampled {} events from the {}-{} percentile range of temperature anomalies from DJF mean".format(number_of_events, percentile_range[0], percentile_range[1]))
 	return cold_events
 
