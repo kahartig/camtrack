@@ -201,6 +201,47 @@ class TrajectoryFile:
         self.data_12h = trajectories[trajectories['hour'] % 12 == 0]
         self.data_24h = trajectories[trajectories['hour'] % 24 == 0]
 
+    def col2da(self, trajectory_number, data_column, include_coords=None):
+        '''
+        Convert any trajectory data column into an xarray.DataArray with
+        additional coordinate(s) given by other column(s)
+
+        Dimension of resulting DataArray will be highest-order index in 
+        trajectory data, self.data. If additional columns are requested in
+        include_coords, they will share the same dimension.
+
+        Parameters
+        ----------
+        trajectory_number: integer
+            number corresponding to specific trajectory of interest
+            Trajectory data is retrieved with self.data.loc[trajectory_number]
+        data_column: string
+            key of data column to be converted to DataArray
+        include_coords: string or list of strings
+            keys for other columns to be included as additional coordinates in
+            the DataArray produced
+            Default is None: no additional coordinates
+        '''
+        trajectory = self.data.loc[trajectory_number]
+        column_da = xr.DataArray.from_series(trajectory[data_column])
+
+        # Retrieve name of dimension
+        if len(column_da.dims) == 1:
+            indexer_name = column_da.dims[0]
+        else:
+            raise ValueError("Trajectory data has too many dimensions: {}.\
+                Expecting only 1 indexer like 'traj age' on a single\
+                trajectory".format(column_da.dims))
+
+        # Add extra columns as coordinates
+        if isinstance(include_coords, str):
+            include_coords = (include_coords, ) # make string an iterable
+
+        if include_coords is not None:
+            for column in include_coords:
+                column_da = column_da.assign_coords({column: (indexer_name, trajectory[column])})
+        return column_da
+
     def winter(self, out_format):
         '''
         Return year(s) corresponding to the winter in which these trajectories occurred
