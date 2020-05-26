@@ -21,15 +21,15 @@ from numpy.random import randint
 from operator import itemgetter
 
 
-def anomaly_DJF(data_dict_list, method):
+def anomaly_DJF(data_list, method):
 	"""
 	Calculate the anomaly from the DJF mean of the yearly data in data_dict_list
 
 	Parameters
 	----------
-	data_dict_list: list of dictionaries
-		each element in the list is a dictionary containing one winter (DJF) of
-		data, a [time, lat, lon] array accessed with 'data' key
+	data_dict_list: list of DataArrays
+		each element in the list is a DataArray containing one winter (DJF) of
+		[time, lat, lon] data
 	method: string
 		must be either 'absolute' or 'scaled'
 		if 'absolute', output is just data - DJF mean
@@ -38,41 +38,23 @@ def anomaly_DJF(data_dict_list, method):
 	Returns
 	-------
 	diff_dict: dictionary
-		'diff': a [time, lat, lon] array of anomalies from the DJF mean,
-			calculated according to method argument. Arrays from each year of
-			the input have been concatenated along the first (time) axis;
-			corresponding time coordinates are stored in 'time'
-		'mean': a [lat, lon] array of the DJF mean across all years provided
-		'time': coordinate array for time; formed by concatenating along all
-			years provided in data_dict_list
-		'lat': coordinate array for latitude
-		'lon': coordinate array for longitude
+		'diff': a [time, lat, lon] DataArray of anomalies from the DJF mean,
+			calculated according to 'method' argument. Arrays from each year of
+			the input have been concatenated along the time axis
+		'mean': a [lat, lon] DataArray of the DJF mean across all years provided
 	"""
-	# Check that all data arrays have the same lat and lon dimensions
-	same_lat = np.allclose(np.concatenate([d['lat'] for d in data_dict_list]), np.tile(data_dict_list[0]['lat'], len(data_dict_list)))
-	same_lon = np.allclose(np.concatenate([d['lon'] for d in data_dict_list]), np.tile(data_dict_list[0]['lon'], len(data_dict_list)))
-	if same_lat:
-		latitudes = data_dict_list[0]['lat']
-	else:
-		raise ValueError('Latitude dimensions of data in data_dict_list do not match')
-	if same_lon:
-		longitudes = data_dict_list[0]['lon']
-	else:
-		raise ValueError('Longitude dimensions of data in data_dict_list do not match')
-
-	data_all_winters = np.concatenate([d['data'] for d in data_dict_list], axis=0)
-	mean_all_winters = np.mean(data_all_winters, axis=0)
-	stdev_all_winters = np.std(data_all_winters, axis=0)
+	data_all_winters = xr.concat(data_list, dim='time')
+	mean_all_winters = data_all_winters.mean(dim='time')
+	stdev_all_winters = data_all_winters.std(dim='time')
 	if method == 'absolute':
-		difference = data_all_winters - mean_all_winters  # CHECK NUMPY BROADCASTING
+		difference = data_all_winters - mean_all_winters
 	elif method == 'scaled':
 		difference = (data_all_winters - mean_all_winters)/stdev_all_winters
 	else:
 		raise ValueError("Method must be 'absolute' or 'scaled'")
 
-	# make dictionary to hold difference array and dimensions
-	time_all_winters = np.concatenate([d['time'] for d in data_dict_list])
-	diff_dict = {'diff': difference, 'mean': mean_all_winters, 'time': time_all_winters, 'lat': latitudes, 'lon': longitudes}
+	# make dictionary to hold mean and anomaly arrays
+	diff_dict = {'diff': difference, 'mean': mean_all_winters}
 	return diff_dict
 
 
