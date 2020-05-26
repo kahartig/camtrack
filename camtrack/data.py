@@ -29,6 +29,7 @@ import os
 import cftime
 import calendar
 import Ngl
+import scipy.interpolate as interpolate
 
 
 class TrajectoryFile:
@@ -247,6 +248,72 @@ class TrajectoryFile:
             for column in include_coords:
                 column_da = column_da.assign_coords({column: (indexer_name, trajectory[column])})
         return column_da
+
+    def height2pressure(self, cam_dir, trajectory_number, height_key='height (m)'):
+        '''
+        Return 3-hourly trajectory with new column 'pressure' of pressure levels along trajectory path
+        DOC
+
+        NOTE this function is not exact; it should depend on which variables
+        were provided to HYSPLIT when calculating trajectory, model height, etc.
+
+        '''
+        winter_file = WinterCAM(cam_dir, self)
+        trajectory = self.get_trajectory(trajectory_number, 3)
+        pressures_from_h = []
+        for age,point in trajectory.iterrows():
+            t_time = point['cftime date']
+            t_lat = point['lat']
+            t_lon = point['lon']
+            # Retrieve surface pressure and temperature at point
+            p_surf_col = winter_file.variable('PS').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest').values.item()
+            temp_surf_col = winter_file.variable('TREFHT').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest').values.item()
+            # Retrieve vertical column of temperature, specific humidity at point
+            T_col = winter_file.variable('T').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest')
+            Q_col = winter_file.variable('Q').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest')
+            column_data = xr.Dataset({'T': T_col, 'Q': Q_col}).assign_coords({'pres': ('lev', p0*hyam + p_surf_col*hybm)}).swap_dims({'lev': 'pres'})
+            column_data = column_data.sortby('pres', ascending=False) # sort surface -> TOA
+
+            # Re-create HYSPLIT's method for converting from pressure to height
+            # REF: prfecm.f
+            # initialize DataArray of heights of each data level
+            level_heights = xr.full_like(column_data.pres, 0)
+            # constants
+            RDRY = 287.04
+            GRAV = 9.80616
+            ZMDL = 10000 # model height in m; provided to HYSPLIT in CONTROL file
+            # at bottom of column:
+            ZBOT = 0
+            P0 = p_surf_col # surface pressure
+            TBOT = temp_surf_col # surface temp; should be TREFHT, if provided to HYSPLIT
+            TVBOT = TBOT * (1 + 0.61*column_data['Q'][0])
+            PBOT = np.log(P0)
+            # loop over data values:
+            for KZ,p in enumerate(column_data.pres):
+                # set values for top of layer
+                PTOP = np.log(p)
+                TTOP = column_data['T'][KZ]
+                TVTOP = TTOP * (1.0 + 0.61*column_data['Q'][KZ])
+                # get height at top of layer
+                TVBAR = 0.5 * (TVTOP + TVBOT)
+                DELZ = (PBOT - PTOP) * RDRY * TVBAR / GRAV
+                ZTOP = ZBOT + DELZ
+                level_heights[KZ] = ZTOP
+                # re-set bottom values to current top values
+                PBOT=PTOP
+                ZBOT=ZTOP
+                TBOT=TTOP
+                TVBOT=TVTOP
+            # add surface values to pressure and height mapping arrays
+            h_surf_da = xr.DataArray([0], [('pres', [p_surf_col])])
+            heights = xr.concat([h_surf_da, level_heights.drop_vars('lev')], dim='pres')
+            pressures = heights.pres
+
+            # Generate function to map from height to pressure
+            h2p = interpolate.interp1d(heights, pressures)
+            pressures_from_h.append(h2p(point[height_key]))
+        trajectory['pressure'] = pressures_from_h
+        return trajectory
 
     def winter(self, out_format):
         '''
