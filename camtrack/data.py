@@ -395,7 +395,7 @@ class WinterCAM:
     # name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
     #                                 'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
 
-    def __init__(self, file_dir, trajectories=None):
+    def __init__(self, file_dir, trajectories=None, winter=None):
         '''
         Parameters
         ----------
@@ -411,11 +411,23 @@ class WinterCAM:
             if not None, must be a family of trajectories that start at the same
                 place and time. CAM files are loaded that correspond to the
                 year(s) associated with these trajectories
+        winter: string
+            indicates which winter to pull h1 through h4 files for
+                e.g. for 0009-0010 winter, winter='0910'
+            mutually exclusive with trajectories
         '''
         # Open the CAM files with xarray
-        if trajectories is not None:
+        if (trajectories is None) and (winter is None):
+            # Read in a single netCDF file
+            dataset = xr.open_dataset(file_dir)
+        else:
+            if trajectories is not None:
+                winter_str = trajectories.winter(out_format='firstsecond')
+            elif winter is not None:
+                winter_str = winter
+            else:
+                raise ValueError('Trajectories and winter arguments are mutually exclusive, only one or the other can be provided')
             # Read in h1, h2, h3, and h4 for the winter corresponding to trajectories
-            winter_str = trajectories.winter(out_format='firstsecond')
             nc_file_path = os.path.join(
                 file_dir, 'pi_3h_' + winter_str + '_h1.nc')
             ds1 = xr.open_dataset(nc_file_path)
@@ -435,11 +447,7 @@ class WinterCAM:
             ds2 = ds2.drop_vars(dropped_vars, errors='ignore')
             ds3 = ds3.drop_vars(dropped_vars, errors='ignore')
             ds4 = ds4.drop_vars(dropped_vars, errors='ignore')
-
             dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
-        else:
-            # Read in a single netCDF file
-            dataset = xr.open_dataset(file_dir)
 
         # Add numerical time coordinate
         # NOTE: time units are an assumption; cannot retrieve the units
