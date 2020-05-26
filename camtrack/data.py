@@ -566,6 +566,24 @@ class WinterCAM:
         return variable_da_on_p_levels
 
 
+def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_bounds, mask_by='LANDFRAC', mask_threshold=0.9):
+    '''
+    Return variable after subsetting by time, latitude, and longitude and masking by another variable.
+
+    When masking, values from variable_key are replaced by np.nan wherever the mask_by variable is less than the mask_threshold
+
+    DOC
+
+    '''
+    time_slice = slice(time_bounds[0], time_bounds[1])
+    lat_slice = slice(lat_bounds[0], lat_bounds[1])
+    lon_slice = slice(lon_bounds[0], lon_bounds[1])
+    subset_variable = winter_file.variable(variable_key).sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+    subset_mask = winter_file.variable(mask_by).sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+    masked_variable = subset_variable.where(subset_mask > mask_threshold, np.nan)
+    return masked_variable
+
+
 def subset_nc(filename, winter_idx, desired_variable_key, lat_bounds, lon_bounds, landfrac_min=0.9, testing=False):
     '''
     Take a subset in time and lat/lon of the variable specified by
