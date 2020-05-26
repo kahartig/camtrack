@@ -265,12 +265,19 @@ class TrajectoryFile:
             t_time = point['cftime date']
             t_lat = point['lat']
             t_lon = point['lon']
+            
             # Retrieve surface pressure and temperature at point
             p_surf_col = winter_file.variable('PS').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest').values.item()
             temp_surf_col = winter_file.variable('TREFHT').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest').values.item()
+            
             # Retrieve vertical column of temperature, specific humidity at point
             T_col = winter_file.variable('T').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest')
             Q_col = winter_file.variable('Q').sel(time=t_time, lat=t_lat, lon=t_lon, method='nearest')
+            
+            # Replace hybrid level coordinate 'lev' with pressure levels 'pres'
+            p0 = winter_file.variable('P0').values.item()
+            hyam = winter_file.variable('hyam').values
+            hybm = winter_file.variable('hybm').values
             column_data = xr.Dataset({'T': T_col, 'Q': Q_col}).assign_coords({'pres': ('lev', p0*hyam + p_surf_col*hybm)}).swap_dims({'lev': 'pres'})
             column_data = column_data.sortby('pres', ascending=False) # sort surface -> TOA
 
