@@ -12,6 +12,7 @@ Functions:
 # Standard Imports
 import numpy as np
 import pandas as pd
+import xarray as xr
 import cftime
 import math
 
