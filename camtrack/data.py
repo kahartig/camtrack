@@ -804,7 +804,7 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         and data file pi_3h_YYYY.arl
     '''
     # Set up file paths
-    data_path = os.path.join(data_dir, 'winter_' + winter_string(event['time'], 'first-second'), '')  # with trailing slash
+    data_path = os.path.join(data_dir, '')  # with trailing slash
     data_filename = 'pi_3h_' + winter_string(event['time'], 'firstsecond') + '.arl'
     traj_dir = os.path.join(traj_dir, '') # add trailing slash if not already there
     control_path = os.path.join(output_dir, 'CONTROL_' + str(event_ID))
