@@ -442,7 +442,7 @@ class WinterCAM:
             ds4 = xr.open_dataset(nc_file_path)
 
             # Remove variables that should conflict between files before merging
-            dropped_vars = ['time_written']
+            dropped_vars = ['time_written', 'date_written']
             ds1 = ds1.drop_vars(dropped_vars, errors='ignore')
             ds2 = ds2.drop_vars(dropped_vars, errors='ignore')
             ds3 = ds3.drop_vars(dropped_vars, errors='ignore')
