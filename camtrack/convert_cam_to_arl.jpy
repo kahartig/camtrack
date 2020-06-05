@@ -57,8 +57,8 @@ open(out_filename, 'a').close();
 
 # Map CAM variables to ARL variables
 #    Surface variables:
-varmap_2d = {'PS': 'PRSS', 'TREFHT': 'T02M', 'U10': 'U10M'}
-unitmap_2d = {'PS': 0.01, 'TREFHT': 1., 'U10': 1.}
+varmap_2d = {'PS': 'PRSS', 'TREFHT': 'T02M'}
+unitmap_2d = {'PS': 0.01, 'TREFHT': 1.}
 #    Full domain variables:
 varmap_3d = {'T': 'TEMP', 'U': 'UWND', 'V': 'VWND', 'OMEGA': 'WWND', 'Z3': 'HGTS', 'RELHUM': 'RELH'}
 unitmap_3d = {'T': 1., 'U': 1., 'V': 1., 'OMEGA': 0.01, 'Z3': 1., 'RELHUM': 1.}
