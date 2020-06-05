@@ -356,7 +356,7 @@ class TrajectoryFile:
 
             # Generate function to map from height to pressure
             h2p = interpolate.interp1d(heights, pressures)
-            pressures_from_h.append(h2p(point[height_key]))
+            pressures_from_h.append(h2p(point[height_key]).item())
         trajectory['pressure'] = pressures_from_h
         return trajectory
 
