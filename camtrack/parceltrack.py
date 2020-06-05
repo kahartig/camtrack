@@ -122,8 +122,8 @@ class ClimateAlongTrajectory:
         # Set up interpolation to pressure levels for 3-D variables:
         if has_3d_vars:
             #    set up subset to trajectory path        
-            lat_pad = 1.1 * max(abs(np.diff(traj_lat_da.values)))
-            lon_pad = 1.1 * max(abs(np.diff(traj_lon_da.values)))
+            lat_pad = 2. * max(abs(np.diff(traj_lat_da.values)))
+            lon_pad = 2. * max(abs(np.diff(traj_lon_da.values)))
             lat_slice = slice(min(traj_lat_da.values) - lat_pad, max(traj_lat_da.values) + lat_pad)
             lon_slice = slice(min(traj_lon_da.values) - lon_pad, max(traj_lon_da.values) + lon_pad)
             time_slice = traj_time_da.values
