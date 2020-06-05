@@ -158,20 +158,48 @@ class TrajectoryFile:
         #    10 - lons
         #    11 - height
         #    ... and then any additional diagnostic output variables
-        traj_columns = ['traj #', 'grid #', 'year', 'month', 'day', 'hour',
-                        'minute', 'fhour', 'traj age', 'lat', 'lon', 'height (m)']
-        traj_dtypes = {'traj #': int, 'grid #': int, 'year': int, 'month': int, 'day': int, 'hour': int,
-                       'minute': int, 'fhour': int, 'traj age': int, 'lat': float, 'lon': float, 'height (m)': float}
-        for var in self.diag_var_names:
-            traj_columns.append(var)
-            traj_dtypes[var] = float
+
         # skip over header; length depends on number of grids and trajectories
         traj_skiprow = 1 + ngrids + 1 + ntraj + 1
 
-        # read in file as csv
-        trajectories = pd.read_csv(filepath, delim_whitespace=True, header=None, names=traj_columns, index_col=[
-                                   0, 8], dtype=traj_dtypes, skiprows=traj_skiprow)
+        # set up column names, dtype, widths
+        traj_columns = ['traj #', 'grid #', 'year', 'month', 'day', 'hour',
+                        'minute', 'fhour', 'traj age', 'lat', 'lon', 'height (m)']
+        traj_dtypes = {'traj #': int, 'grid #': int, 'year': int, 'month': int, 'day': int, 'hour': int,
+                       'minute': int, 'fhour': int, 'traj age': int, 'lat': str, 'lon': str, 'height (m)': str}
+        col_widths = [6, 6, 6, 6, 6, 6, 6, 6, 8, 9, 9, 9]
+        for var in self.diag_var_names:
+            col_widths.append(9)
+            traj_columns.append(var)
+            traj_dtypes[var] = str
+
+        # read in file in fixed-width format
+        trajectories = pd.read_fwf(filepath, widths=col_widths, names=traj_columns, dtype=traj_dtypes,
+                           skiprows=traj_skiprow).set_index(['traj #', 'traj age'])
         trajectories.sort_index(inplace=True)
+
+        # if trajectories hit ground (starting with row of ***** or NaN):
+        #    identify row(s) where trajectory hits the ground
+        idx_grounded = trajectories[trajectories.lat == '*********'].index
+        #    replace values in grounded row with np.nan
+        float_columns = ['lat', 'lon', 'height (m)']
+        for var in self.diag_var_names:
+            float_columns.append(var)
+        #    for each column that should become a float, replace value with NaN
+        for col in float_columns:
+            trajectories.loc[idx_grounded, col] = np.nan
+            traj_dtypes[col] = float
+        #    remove columns that have become indices before changing dtype
+        del traj_dtypes['traj #']
+        del traj_dtypes['traj age']
+        trajectories = trajectories.astype(traj_dtypes)
+        #    store record of which trajectories have NaN values/become grounded
+        is_grounded = {}
+        for traj_idx in range(1, self.ntraj + 1):
+            is_grounded[traj_idx] = trajectories.loc[traj_idx].isnull().values.any()
+        self.hit_ground = is_grounded
+        # drop any rows with NaN (after trajectory becomes grounded)
+        trajectories = trajectories.dropna('index', 'any')
 
         # convert longitudes from -180 to 180 to 0 to 360 scale for consistency with CAM files
         trajectories['lon'].mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
