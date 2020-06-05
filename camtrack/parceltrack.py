@@ -147,7 +147,7 @@ class ClimateAlongTrajectory:
                 if traj_interpolation == 'nearest':
                     values = variable_data.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
                 elif traj_interpolation == 'linear':
-                    values = variable_data.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear')
+                    values = variable_data.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear', kwargs={'bounds_error': True})
                 else:
                     raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
 
@@ -159,7 +159,7 @@ class ClimateAlongTrajectory:
                 if traj_interpolation == 'nearest':
                     values = da_on_pressure_levels.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
                 elif traj_interpolation == 'linear':
-                    values = da_on_pressure_levels.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear')
+                    values = da_on_pressure_levels.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear', kwargs={'bounds_error': True})
                 else:
                     raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
 
