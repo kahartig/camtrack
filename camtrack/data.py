@@ -228,7 +228,7 @@ class TrajectoryFile:
         self.data_1h = trajectories
         self.data = trajectories[trajectories['hour'] % 3 == 0] # every 3 hours
 
-    def get_trajectory(self, trajectory_number, hourly_interval=3, age_interval=None):
+    def get_trajectory(self, trajectory_number, hourly_interval=None, age_interval=None):
         '''
         Return data from every hourly_interval hours or age_interval age for a single trajectory using integer trajectory number
         '''
@@ -241,7 +241,7 @@ class TrajectoryFile:
             interval_col = single_trajectory.index
             interval = age_interval
         else:
-            raise ValueError("Must provide interval for retrieval either by hour-of-day or by trajectory age in hours, not both")
+            raise ValueError("Must provide interval for retrieval either by hour-of-day or by trajectory age in hours")
         
         iseveryxhours = interval_col % interval == 0
         return single_trajectory[iseveryxhours]
