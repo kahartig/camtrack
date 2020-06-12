@@ -23,6 +23,23 @@ winter_file = '0708'  # file extension for winter year
 indatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/CAM_output_winters/'
 outdatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/ARL_winters/'
 
+# Function to convert from no-leap ordinal time to datetime.datetime timestamp
+# MeteoInfo's default method for this, sample_file.gettime(), assumes a Gregorian
+# calendar with leap years because the datetime module does as well; must
+# convert CAM's no-leap ordinal times to year/month/day/hour format by hand
+import datetime
+def custom_ord2date(ordinal_time):
+    base_date = {'year': 1, 'day': 1, 'hour': 0} # assumes time unit is 'days since 0001-01-01 00:00:00'
+    dpm_cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365] # cumulative days per month
+    year, ordinal_day = divmod(ordinal_time, 365)
+    year = int(year) + base_date['year']
+    day_of_year, ordinal_hour = divmod(ordinal_day, 1)
+    day_of_year = int(day_of_year) + base_date['day']
+    hour = int(ordinal_hour * 24)
+    month = next(idx for idx,dpm in enumerate(dpm_cum) if day_of_year <= dpm)
+    day_of_month = day_of_year - dpm_cum[month - 1]
+    return datetime.datetime(year, month, day_of_month, hour)
+
 # Read the input netCDF data files
 #     variables are spread across 4 netCDF files
 #     dictionaries will be used to access the relevant file
@@ -98,7 +115,7 @@ for t in range(0, num_times):
     # Write ARL data file
     temp_file.setx(sample_variable.dimvalue(lon_index))
     temp_file.sety(sample_variable.dimvalue(lat_index))
-    timestamp = sample_file.gettime(t)
+    timestamp = custom_ord2date(sample_file['time'][:][t])
     print 'Time stamp: ' + str(timestamp)
     # In getdatahead below, integer is "vertical coordinate system flag":
     #     1 (sigma fraction), 2 (pressure mb), 3 (terrain fraction), 4 (hybrid sigma-pressure)
