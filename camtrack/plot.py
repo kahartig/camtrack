@@ -64,27 +64,6 @@ def trajectory_path_plots(trajectory_paths):
         ax.add_feature(cfeature.COASTLINE)
         ax.gridlines(color='black', linestyle='dotted')
 
-        # Plot start point as a blue X
-        plt.scatter(trajfile.traj_start['lon'], trajfile.traj_start['lat'],
-                    transform=ccrs.Geodetic(), c='tab:blue', marker='X', s=150, zorder=3)
-
-        # Set up coloring by height
-        n_heights = len(trajfile.traj_start['height'])
-        c_height = cm_height(np.linspace(0.2, 0.8, n_heights))
-
-        # Loop over trajectory heights
-        for traj_idx,df in trajfile.data.groupby(level=0):
-            trajectory = df.loc[traj_idx]
-            max_age = min(trajectory.index.values)
-            # Plot trajectory path, colored by initial height
-            initial_height = trajectory.loc[0]['height (m)']
-            plt.plot(trajectory['lon'].values, trajectory['lat'].values,
-                     color=c_height[traj_idx-1], label='{:.0f} m'.format(initial_height),
-                     linewidth=2.5, transform=ccrs.Geodetic(), zorder=1)
-            # Mark end point of trajectory
-            plt.scatter(trajectory.loc[max_age]['lon'], trajectory.loc[max_age]['lat'],
-                        transform=ccrs.Geodetic(), c='tab:gray', marker='o', s=75, zorder=2)
-
         # Set circular outer boundary
         theta = np.linspace(0, 2 * np.pi, 100)
         center, radius = [0.5, 0.5], 0.5
@@ -92,11 +71,35 @@ def trajectory_path_plots(trajectory_paths):
         circle = mpath.Path(verts * radius + center)
         ax.set_boundary(circle, transform=ax.transAxes)
 
-        # Resize and add title
-        ax.figure.set_size_inches(10, 10)
-        deg = u'\N{DEGREE SIGN}'
+        # Plot start point as a blue X
+        ax.scatter(trajfile.traj_start['lon'], trajfile.traj_start['lat'],
+            s=150, c='tab:blue', marker='X', transform=ccrs.Geodetic(), zorder=4)
+
+        # Set up coloring by height
+        n_heights = len(trajfile.traj_start['height'])
+        c_height = cm_height(np.linspace(0.2, 0.8, n_heights))
+
+        # Loop over trajectory heights
+        for traj_idx,df in trajfile.data.groupby(level=0):
+            trajectory = trajfile.get_trajectory(traj_idx, 3)
+            max_age = min(trajectory.index.values)
+            # Plot trajectory path, colored by initial height
+            initial_height = trajectory.loc[0]['height (m)']
+            ax.plot(trajectory['lon'].values, trajectory['lat'].values,
+                color=c_height[traj_idx-1], label='{:.0f} m'.format(initial_height),
+                linewidth=2.5, transform=ccrs.Geodetic(), zorder=1)
+            # Mark end point of trajectory
+            ax.scatter(trajectory.loc[max_age]['lon'], trajectory.loc[max_age]['lat'],
+                s=75, c='tab:gray', marker='o', transform=ccrs.Geodetic(), zorder=3)
+            # Mark every 24 hours in age
+            daily_traj = trajfile.get_trajectory(traj_idx, age_interval=24)
+            ax.scatter(daily_traj['lon'].values, daily_traj['lat'].values,
+                s=60, c='tab:blue', marker='+', transform=ccrs.Geodetic(), zorder=2)
+
+        # Add title
+        traj_file_name = os.path.basename(traj_path)
         date_string = '{:04.0f}-{:02.0f}-{:02.0f}'.format(trajfile.traj_start.loc[0]['year'], trajfile.traj_start.loc[0]['month'], trajfile.traj_start.loc[0]['day'])
-        plt.title('Event {} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(event_ID, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg, fontsize=22))
+        ax.set(title='{} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(traj_file_name, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg))NEW ##
         ax.legend(loc='upper right')
 
         if saving:
