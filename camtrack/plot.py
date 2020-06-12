@@ -10,35 +10,50 @@ Functions:
     contour_plots:  for each event, plot contours of 3-D climate variables interpolated onto the path of a given trajectory
 """
 
-def trajectory_path_plots(num_events, traj_dir, save_dir):
+def trajectory_path_plots(trajectory_paths):
     '''
     For each event index from 0 to num_events-1, save North Polar Stereo plot of
     all trajectories in the corresponding trajectory file
     
     Parameters
     ----------
-    num_events: integer
-        number of events to generate trajectory plots for
-        assuming each .traj file is named 'traj_event<event idx>.traj':
-            event index of 2 -> 'traj_event02.traj'
-    traj_dir: path-like or string
-        path to directory where trajectory files are stored
-    save_dir: path-like or string
-        path to directory where trajectory plots will be saved
-        output file name format is 'traj_plot_event<event idx>.png'
+    trajectory_paths: list or dictionary
+        if list:
+            list of paths to all .traj files to be plot
+            all plots will be printed to the screen
+        if dict:
+            mapping between paths to .traj files and paths to save files
+            all plots will be saved at designated save file locations
     '''
-    for event_ID in range(0, num_events):
-        save_file_path = os.path.join(save_file_dir, 'traj_plot_event{:02d}.png'.format(event_ID))
-        traj_path = os.path.join(traj_dir, 'traj_event{:02d}.traj'.format(event_ID))
+    # Parse input argument
+    if isinstance(trajectory_paths, dict):
+        saving = True
+        path_list = list(trajectory_paths.keys())
+    elif isinstance(trajectory_paths, list):
+        saving = False
+        path_list = trajectory_paths
+    else:
+        raise TypeError('trajectory_paths must be either a dictionary of trajectory : savefile path \
+            pairs or a list of trajectory paths, not {}'.format(type(trajectory_paths)))
+
+    # Initialize plot
+    if saving:
+        # a single figure will be saved and then over-written for each loop
+        fig, ax = plt.subplots(1, 1, figsize=(10,10), subplot_kw={'projection': ccrs.NorthPolarStereo()})
+    plt.rcParams.update({'font.size': 14})  # set overall font size
+    cm_height = plt.get_cmap('inferno') # colormap for trajectory height
+    deg = u'\N{DEGREE SIGN}'
+
+    for traj_path in path_list:
+        if saving:
+            save_file_path = trajectory_paths[traj_path]
+        else:
+            # a new figure for each loop to be displayed
+            fig, ax = plt.subplots(1, 1, figsize=(10,10), subplot_kw={'projection': ccrs.NorthPolarStereo()})
+
         trajfile = ct.TrajectoryFile(traj_path)
 
-        # Initialize plot
-        plt.clf()
-        plt.rcParams.update({'font.size': 14})  # set overall font size
-        cm_height = plt.get_cmap('inferno') # colormap for trajectory height
-
         # Set map projection
-        ax = plt.axes(projection=ccrs.NorthPolarStereo())
         ax.set_global()
         min_plot_lat = 50 if all(trajfile.data['lat'].values > 50) else min(
             trajfile.data['lat'].values) - 5
@@ -84,9 +99,14 @@ def trajectory_path_plots(num_events, traj_dir, save_dir):
         plt.title('Event {} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(event_ID, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg, fontsize=22))
         ax.legend(loc='upper right')
 
-        plt.savefig(save_file_path)  # , transparent=True)
-        plt.close()
-        print('Finished saving trajectory path for event {}'.format(event_ID))
+        if saving:
+            fig.savefig(save_file_path)
+            print('Finished saving path for {}...'.format(traj_file_name))
+        else:
+            plt.show()
+        ax.clear()
+    plt.close()
+
 
 def line_plots_by_event(num_events, num_traj, cam_variables, traj_variables, custom_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
     '''
