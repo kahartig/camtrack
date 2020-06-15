@@ -8,6 +8,9 @@ Functions:
     line_plots_by_event: for each event, plot 2-D climate variables sampled along trajectory paths at all heights
     line_plots_by_trajectory: for each initial trajectory height, plot 2-D climate variables sampled along trajectory path for all events
     contour_plots:  for each event, plot contours of 3-D climate variables interpolated onto the path of a given trajectory
+    generate_trajlist: generate a list of paths to trajectory files
+    generate_traj2save: generate a dictionary mapping between trajectory file paths and save file paths
+    generate_tnum2save: generates a dictionary mapping between integer trajectory numbers and save file paths
 """
 
 def trajectory_path_plots(trajectory_paths):
@@ -408,3 +411,41 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         for ax in axs:
             ax.clear()
     plt.close()
+
+def generate_trajlist(num_events, traj_dir):
+    '''
+    Generate a list of paths to trajectory files numbered 0 to num_events-1
+
+    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from 00 to num_events-1
+    '''
+    trajectory_list = []
+    for event_ID in range(num_events):
+        trajectory_list.append(os.path.join(traj_dir, 'traj_event{:02d}.traj'.format(event_ID)))
+    return trajectory_list
+
+def generate_traj2save(num_events, traj_dir, save_dir, save_prefix):
+    '''
+    Generate a dictionary mapping between trajectory file paths and save file paths
+
+    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from 00 to num_events-1
+    Assumes save file name format save_prefix + '_eventXX.png' where XX runs from 00 to num_events-1
+    '''
+    traj2save_dict = {}
+    for event_ID in range(num_events):
+        traj_path = os.path.join(traj_dir, 'traj_event{:02d}.traj'.format(event_ID))
+        save_path = os.path.join(save_dir, save_prefix + '_event{:02d}.png'.format(event_ID)) ########
+        traj2save_dict[traj_path] = save_path
+    return traj2save_dict
+
+def generate_tnum2save(num_traj, save_dir, save_prefix):
+    '''
+    Generate a dictionary mapping between integer trajectory numbers and save file paths
+
+    Trajectory numbers run from 1 to num_traj
+    Assumes save file name format save_prefix + '_trajXX.png' where XX runs from 01 to num_traj
+    '''
+    tnum2save_dict = {}
+    for traj_number in range(1, num_trajs + 1):
+        save_path = os.path.join(save_dir, save_prefix + '_traj{:02d}.png'.format(traj_number))
+        tnum2save_dict[traj_number] = save_path
+    return tnum2save_dict
