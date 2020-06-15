@@ -105,7 +105,7 @@ num_times = sample_file.timenum()
 fhour = 0  # Offset for initial time; incremented for each timestamp
 for t in range(0, num_times):
     # Set temporary output ARL data file
-    temp_filename = os.path.join(outdatadir, 'cam_to_arl_temp.arl')
+    temp_filename = os.path.join(outdatadir, 'cam_to_arl_temp' + winter_file + '.arl')
     temp_file = addfile(temp_filename, 'c', dtype='arl')
     temp_file.setlevels(levels)
     temp_file.set2dvar(varmap_2d.values())
