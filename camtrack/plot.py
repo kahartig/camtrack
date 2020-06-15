@@ -362,12 +362,20 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         raise TypeError('trajectory_paths must be either a dictionary of trajectory : savefile path \
             pairs or a list of trajectory paths, not {}'.format(type(trajectory_paths)))
 
+    # Initialize plot
+    num_plots = len(cam_variables)
+    if saving:
+        # a single figure will be saved and then over-written for each loop
+        fig, axs = plt.subplots(num_plots, 1, figsize=(8, 6*num_plots))
+    cm = plt.get_cmap('viridis')
+    num_contours = 15
+
     for traj_path in path_list:
         if saving:
             save_file_path = trajectory_paths[traj_path]
         else:
             # a new figure for each loop to be displayed
-            fig, axs = plt.subplots(num_plots, 1, figsize=(8,6*num_plots))
+            fig, axs = plt.subplots(num_plots, 1, figsize=(8, 6*num_plots))
         traj_file_name = os.path.basename(traj_path)
         print('Starting event {}'.format(traj_file_name))
 
@@ -379,24 +387,12 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         pres = cat.data.pres.values
         mesh_time, mesh_pres = np.meshgrid(time, pres)
 
-        # Initialize figure
-        num_plots = len(cam_variables)
-        fig = plt.figure()
-        fig.set_figheight(6 * num_plots)
-        fig.set_figwidth(8)
-        cm = plt.get_cmap('viridis')
-        num_contours = 15
-
-        for idx, variable in enumerate(cam_variables):
+        for var_idx, variable in enumerate(cam_variables):
             var_label = '{} ({})'.format(cat.data[variable].long_name, cat.data[variable].units)
-            ax = fig.add_subplot(num_plots, 1, idx + 1)
-            ax.set_xlabel('Trajectory Age (hours)')
-            ax.set_ylabel('Pressure (Pa)')
-            ax.set_ylim(max(pres), min(pres))
+            axs[var_idx].set(title='{} along Trajectory'.format(variable), xlabel='Trajectory Age (hours)', ylabel='Pressure (Pa)', ylim=(max(pres), min(pres)))
             contour_data = np.transpose(cat.data[variable].values)
-            contour = plt.contourf(mesh_time, mesh_pres, contour_data, num_contours, cmap=cm)
-            plt.colorbar(ax=ax, shrink=0.6, pad=0.02, label=var_label)
-            plt.title('{} along Trajectory'.format(variable))
+            contour = axs[var_idx].contourf(mesh_time, mesh_pres, contour_data, num_contours, cmap=cm)
+            fig.colorbar(contour, ax=axs[var_idx], shrink=0.6, pad=0.02, label=var_label)
 
         plt.tight_layout(h_pad=2.0)
         if saving:
