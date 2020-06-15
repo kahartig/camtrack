@@ -387,11 +387,16 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         pres = cat.data.pres.values
         mesh_time, mesh_pres = np.meshgrid(time, pres)
 
+        # Load parcel height in pressure coordinates
+        traj_w_height = trajfile.height2pressure(cam_dir, traj_number)
+        heights = traj_w_height['pressure']
+
         for var_idx, variable in enumerate(cam_variables):
             var_label = '{} ({})'.format(cat.data[variable].long_name, cat.data[variable].units)
             axs[var_idx].set(title='{} along Trajectory'.format(variable), xlabel='Trajectory Age (hours)', ylabel='Pressure (Pa)', ylim=(max(pres), min(pres)))
             contour_data = np.transpose(cat.data[variable].values)
             contour = axs[var_idx].contourf(mesh_time, mesh_pres, contour_data, num_contours, cmap=cm)
+            axs[var_idx].plot(heights.index.values, heights.values, '-', lw=2, c='black')
             fig.colorbar(contour, ax=axs[var_idx], shrink=0.6, pad=0.02, label=var_label)
 
         plt.tight_layout(h_pad=2.0)
