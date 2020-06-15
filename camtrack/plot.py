@@ -318,7 +318,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
     plt.close()
 
 
-def contour_plots(num_events, traj_number, cam_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
+def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels, traj_interp_method, cam_dir):
     '''
     For each event, generate contour plots in time and pressure of climate
     variables for a specific trajectory.
@@ -329,10 +329,13 @@ def contour_plots(num_events, traj_number, cam_variables, pressure_levels, inter
 
     Parameters
     ----------
-    num_events: integer
-        number of events to generate line plots for
-        assuming each .traj file is named 'traj_event<event idx>.traj':
-            event index of 2 -> 'traj_event02.traj'
+    trajectory_paths: list or dictionary
+        to print to screen:
+            list of paths to all .traj files to be plot
+            all plots will be printed to the screen
+        to save to file:
+            dict mapping between paths to .traj files and paths to save files
+            all plots will be saved at designated save file locations
     traj_number: integer
         specifies which trajectory to plot from each event
     cam_variables: list-like of strings
@@ -343,26 +346,35 @@ def contour_plots(num_events, traj_number, cam_variables, pressure_levels, inter
         pressure_levels should be at least equal to the number of hybrid levels
         in CAM, otherwise there will be unnecessary loss of information during
         the interpolation
-    interp_method: 'nearest' or 'linear'
+    traj_interp_method: 'nearest' or 'linear'
         interpolation method for matching trajectory lat-lon to CAM variables
-    traj_dir: path-like or string
-        path to directory where trajectory files are stored
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
-    save_dir: path-like or string
-        path to directory where trajectory plots will be saved
-        output file name format is 'traj_plot_event<event idx>.png'
     '''
-    for event_ID in range(0, num_events):
-        print('Starting event {}'.format(event_ID))
-        # Generate save file path
-        save_file_path = os.path.join(save_dir, 'contour_plot_event{:02d}.png'.format(event_ID))
+    # Parse input argument
+    if isinstance(trajectory_paths, dict):
+        saving = True
+        path_list = list(trajectory_paths.keys())
+    elif isinstance(trajectory_paths, list):
+        saving = False
+        path_list = trajectory_paths
+    else:
+        raise TypeError('trajectory_paths must be either a dictionary of trajectory : savefile path \
+            pairs or a list of trajectory paths, not {}'.format(type(trajectory_paths)))
+
+    for traj_path in path_list:
+        if saving:
+            save_file_path = trajectory_paths[traj_path]
+        else:
+            # a new figure for each loop to be displayed
+            fig, axs = plt.subplots(num_plots, 1, figsize=(8,6*num_plots))
+        traj_file_name = os.path.basename(traj_path)
+        print('Starting event {}'.format(traj_file_name))
 
         # Load trajectory for the event
-        traj_path = os.path.join(traj_dir, 'traj_event{:d}.traj'.format(event_ID))
         trajfile = ct.TrajectoryFile(traj_path)
         camfile = ct.WinterCAM(cam_dir, trajfile)
-        cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, pressure_levels, interp_method)
+        cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
         time = cat.trajectory.index.values
         pres = cat.data.pres.values
         mesh_time, mesh_pres = np.meshgrid(time, pres)
@@ -387,7 +399,11 @@ def contour_plots(num_events, traj_number, cam_variables, pressure_levels, inter
             plt.title('{} along Trajectory'.format(variable))
 
         plt.tight_layout(h_pad=2.0)
-        plt.savefig(save_file_path)
-        plt.close()
-
-        print('Finished event {}\n'.format(event_ID))
+        if saving:
+            fig.savefig(save_file_path)
+            print('Finished saving contour plot for {}...'.format(traj_file_name))
+        else:
+            plt.show()
+        for ax in axs:
+            ax.clear()
+    plt.close()
