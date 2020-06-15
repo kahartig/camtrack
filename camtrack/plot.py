@@ -111,7 +111,7 @@ def trajectory_path_plots(trajectory_paths):
     plt.close()
 
 
-def line_plots_by_event(trajectory_paths, cam_variables, other_variables, pressure_levels, traj_interp_method, cam_dir):
+def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir):
     '''
     For each event index from 0 to num_events-1, generate line plots of climate
     variables along all trajectories
@@ -140,11 +140,6 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, pressu
     custom_variables: list-like of strings
         list of variables to plot with hard-coded special plotting instructions
         currently supported: 'Net cloud forcing'
-    pressure_levels: array-like of floats
-        list of pressures, in Pa, to interpolate onto. Note that the length of
-        pressure_levels should be at least equal to the number of hybrid levels
-        in CAM, otherwise there will be unnecessary loss of information during
-        the interpolation
     traj_interp_method: 'nearest' or 'linear'
         interpolation method for matching trajectory lat-lon to CAM variables
     traj_dir: path-like or string
@@ -166,12 +161,21 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, pressu
         raise TypeError('trajectory_paths must be either a dictionary of trajectory : savefile path \
             pairs or a list of trajectory paths, not {}'.format(type(trajectory_paths)))
 
+    # Initialize plot
+    var_to_plot = cam_variables + other_variables
+    num_plots = len(var_to_plot)
+    if saving:
+        # a single figure will be saved and then over-written for each loop
+        fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots))
+    #plt.rcParams.update({'font.size': 14})  # set overall font size
+    cm_height = plt.get_cmap('inferno') # colormap for trajectory height
+
     for traj_path in path_list:
         if saving:
             save_file_path = trajectory_paths[traj_path]
         else:
             # a new figure for each loop to be displayed
-            fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots)) #######
+            fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots))
         traj_file_name = os.path.basename(traj_path)
         print('Starting event {}'.format(traj_file_name))
 
@@ -181,45 +185,37 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, pressu
         camfile = ct.WinterCAM(cam_dir, trajfile)
         for traj_idx,df in trajfile.data.groupby(level=0):
             print('  Loading trajectory {}...'.format(traj_idx))
-            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method, pressure_levels))
-
-        # Initialize figure
-        var_to_plot = cam_variables + other_variables
-        num_plots = len(var_to_plot)
-        time = all_trajectories[0].trajectory.index.values # assuming all trajs have same age
+            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method))
 
         # Set up coloring by height
-        cm_height = plt.get_cmap('inferno')
         n_heights = len(trajfile.traj_start['height'])
         c_height = cm_height(np.linspace(0.2, 0.8, n_heights))
 
-        # Initialize figure
-        print('  Generating figure...')
-        plt.clf()
-        fig = plt.figure()
-        fig.set_figheight(4*num_plots)
-        fig.set_figwidth(8)
-
         # Plot all variables
         for var_idx, variable in enumerate(var_to_plot):
-            ax = fig.add_subplot(num_plots, 1, idx + 1)
-            ax.set_xlabel('Trajectory Age (hours)')
+            axs[var_idx].set_xlabel('Trajectory Age (hours)')
             if variable == 'Net cloud forcing':
-                ax.set_ylabel(all_trajectories[0].data['LWCF'].units)
-                plt.title('LWCF + SWCF: Net cloud forcing')
-                for t_idx,traj in enumerate(all_trajectories):
-                    plt.plot(time, traj.data['LWCF'].values + traj.data['SWCF'].values, '-', linewidth=2, c=c_height[t_idx])
+                axs[var_idx].set_ylabel(all_trajectories[0].data['LWCF'].units)
+                axs[var_idx].set_title('LWCF + SWCF: Net cloud forcing')
+                for traj_idx,traj in enumerate(all_trajectories):
+                    time = traj.trajectory.index.values
+                    axs[var_idx].plot(time, traj.data['LWCF'].values + traj.data['SWCF'].values, '-o', linewidth=2, c=c_height[traj_idx])
             else:
                 sample_data = all_trajectories[0].data[variable]
-                ax.set_ylabel(sample_data.units)
-                plt.title(variable + ': ' + sample_data.long_name)
-                for t_idx,traj in enumerate(all_trajectories):
-                    plt.plot(time, traj.data[variable].values, '-', linewidth=2, c=c_height[t_idx])
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
+                for traj_idx,traj in enumerate(all_trajectories):
+                    time = traj.trajectory.index.values
+                    axs[var_idx].plot(time, traj.data[variable].values, '-o', linewidth=2, c=c_height[traj_idx])
         plt.tight_layout(h_pad=2.0)
-        plt.savefig(save_file_path)
-        plt.close()
-
-        print('Finished saving line plots for {}'.format(traj_file_name))
+        if saving:
+            fig.savefig(save_file_path)  ## NEW ##
+            print('Finished saving line plots for {}...'.format(traj_file_name))  ## NEW ##
+        else:
+            plt.show()
+        for ax in axs:
+            ax.clear()
+    plt.close()
 
 def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables, custom_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
     '''
