@@ -217,7 +217,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             ax.clear()
     plt.close()
 
-def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables, custom_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
+def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir):
     '''
     For each trajectory number from 1 to num_traj, generate line plots of
     climate variables across all events.
@@ -229,95 +229,93 @@ def line_plots_by_trajectory(num_events, num_traj, cam_variables, traj_variables
 
     Parameters
     ----------
-    num_events: integer
-        number of events to generate line plots for
-        assuming each .traj file is named 'traj_event<event idx>.traj':
-            event index of 2 -> 'traj_event02.traj'
-    num_traj: integer
-        number of trajectories per .traj file
+    trajectory_list: list-like of path-likes
+        list of paths to all .traj files to be included
+    traj_numbers: list or dict
+        to print plots to screen:
+            list of trajectory numbers to plot
+        to save plots to file:
+            dict mapping trajectory numbers to save file paths
     cam_variables: list-like of strings
         list of CAM variables to plot
         must correpond to 2-D variables with dimensions (time, lat, lon)
-    traj_variables: list-like of strings
-        list of variables to plot from trajectory file
-        'HEIGHT' is always available; other diagnostic output variables are only
-        available if corresponding SETUP.CFG variable in HYSPLIT is set to 1
-        when trajectories were generated
-    custom_variables: list-like of strings
-        list of variables to plot with hard-coded special plotting instructions
-        currently supported: 'Net cloud forcing'
-    pressure_levels: array-like of floats
-        list of pressures, in Pa, to interpolate onto. Note that the length of
-        pressure_levels should be at least equal to the number of hybrid levels
-        in CAM, otherwise there will be unnecessary loss of information during
-        the interpolation
-    interp_method: 'nearest' or 'linear'
+    other_variables: list-like of strings
+        list of non-CAM variables to plot
+        includes custom variables and HYSPLIT diagnostic output variables
+        supported custom variables:
+            'Net cloud forcing'
+        HYSPLIT diagnostic output variables:
+            'HEIGHT' is always available
+            other diagnostic output variables are only available if
+            corresponding SETUP.CFG variable in HYSPLIT was set to 1 when
+            trajectories were generated
+    traj_interp_method: 'nearest' or 'linear'
         interpolation method for matching trajectory lat-lon to CAM variables
-    traj_dir: path-like or string
-        path to directory where trajectory files are stored
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
-    save_dir: path-like or string
-        path to directory where trajectory plots will be saved
-        output file name format is 'traj_plot_event<event idx>.png'
     '''
-    for traj_number in range(1, num_traj+1):
+    # Parse input arguments
+    if isinstance(traj_numbers, dict):
+        saving = True
+        traj_number_list = list(traj_numbers.keys())
+    elif isinstance(traj_numbers, list):
+        saving = False
+        traj_number_list = traj_numbers
+    else:
+        raise TypeError('traj_numbers must be either a dictionary of trajectory number : savefile path \
+            pairs or a list of trajectory numbers, not {}'.format(type(traj_numbers)))
+
+    # Initialize plot
+    var_to_plot = cam_variables + other_variables
+    num_plots = len(var_to_plot)
+    if saving:
+        # a single figure will be saved and then over-written for each loop
+        fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots))
+    #plt.rcParams.update({'font.size': 14})  # set overall font size
+    cm_height = plt.get_cmap('inferno') # colormap for trajectory height
+
+    for traj_number in traj_number_list:
+        if saving:
+            save_file_path = traj_numbers[traj_number]
+        else:
+            # a new figure for each loop to be displayed
+            fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots))
         print('Starting trajectory number {}'.format(traj_number))
-        # Generate save file path
-        save_file_path = os.path.join(save_dir, 'line_plot_allevents_traj{:02d}.png'.format(traj_number))
 
         # Save all events at same height
         all_events = []
-        for event_ID in range(0, num_events):
-            print('  Loading event {}...'.format(event_ID))
-            traj_path = os.path.join(traj_dir, 'traj_event{:02d}.traj'.format(event_ID))
+        for traj_path in trajectory_list:
             trajfile = ct.TrajectoryFile(traj_path)
             camfile = ct.WinterCAM(cam_dir, trajfile)
-            all_events.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, pressure_levels, interp_method))
-
-        # Initialize figure
-        print('  Generating figure...')
-        num_plots = len(cam_variables + traj_variables + custom_variables)
-        time = all_events[0].trajectory.index.values # assuming all trajs have same age
-
-        plt.clf()
-        fig = plt.figure()
-        fig.set_figheight(4*num_plots)
-        fig.set_figwidth(8)
-
+            all_events.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method))
+        
         # Plot all variables
-        for idx, variable in enumerate(cam_variables + traj_variables):
-            ax = fig.add_subplot(num_plots, 1, idx + 1)
-            ax.set_xlabel('Trajectory Age (hours)')
-            sample_data = all_events[0].data[variable]
-            ax.set_ylabel(sample_data.units)
-            plt.title(variable + ': ' + sample_data.long_name)
-            sum_all_events = np.zeros(len(sample_data.values))
-            for ev in all_events:
-                plt.plot(time, ev.data[variable].values, '-', linewidth=0.5, c='lightsteelblue')
-                sum_all_events = sum_all_events + ev.data[variable].values
-            plt.plot(time, sum_all_events/len(all_events), '-', linewidth=3, c='steelblue')
-
-        for idx, variable in enumerate(custom_variables):
-            ax = fig.add_subplot(num_plots, 1, len(cam_variables+traj_variables) + idx + 1)
-            ax.set_xlabel('Trajectory Age (hours)')
+        for var_idx, variable in enumerate(var_to_plot):
+            axs[var_idx].set_xlabel('Trajectory Age (hours)')
             if variable == 'Net cloud forcing':
                 sample_data = all_events[0].data['LWCF']
-                ax.set_ylabel(sample_data.units)
-                plt.title('LWCF + SWCF: Net cloud forcing')
-                sum_all_events = np.zeros(len(sample_data.values))
-                for ev in all_events:
-                    plt.plot(time, ev.data['LWCF'].values + ev.data['SWCF'].values, '-', linewidth=0.5, c='lightsteelblue')
-                    sum_all_events = sum_all_events +  ev.data['LWCF'].values + ev.data['SWCF'].values
-                plt.plot(time, sum_all_events/len(all_events), '-', linewidth=3, c='steelblue')
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title('LWCF + SWCF: Net cloud forcing')
+                for ev_idx,ev in enumerate(all_events):
+                    time = ev.trajectory.index.values
+                    axs[var_idx].plot(time, ev.data['LWCF'].values + ev.data['SWCF'].values, '-', linewidth=0.5, c='lightsteelblue')
             else:
-                raise ValueError('Invalid custom variable {}. See function documentation for supported custom variables'.format(variable))
+                sample_data = all_events[0].data[variable]
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
+                for ev in all_events:
+                    time = ev.trajectory.index.values
+                    axs[var_idx].plot(time, ev.data[variable].values, '-', linewidth=0.5, c='lightsteelblue')
 
         plt.tight_layout(h_pad=2.0)
-        plt.savefig(save_file_path)
-        plt.close()
-
-        print('Finished trajectory {}\n'.format(traj_number))
+        if saving:
+            fig.savefig(save_file_path)
+            print('Finished saving line plots for trajectory {}...'.format(traj_number))
+        else:
+            plt.show()
+        for ax in axs:
+            ax.clear()
+    plt.close()
 
 
 def contour_plots(num_events, traj_number, cam_variables, pressure_levels, interp_method, traj_dir, cam_dir, save_dir):
