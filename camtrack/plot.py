@@ -102,7 +102,7 @@ def trajectory_path_plots(trajectory_paths):
         # Add title
         traj_file_name = os.path.basename(traj_path)
         date_string = '{:04.0f}-{:02.0f}-{:02.0f}'.format(trajfile.traj_start.loc[0]['year'], trajfile.traj_start.loc[0]['month'], trajfile.traj_start.loc[0]['day'])
-        ax.set(title='{} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(traj_file_name, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg))NEW ##
+        ax.set(title='{} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(traj_file_name, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg))
         ax.legend(loc='upper right')
 
         if saving:
