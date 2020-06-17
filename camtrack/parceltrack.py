@@ -107,7 +107,8 @@ class ClimateAlongTrajectory:
         if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables) or (variables_3dto1d is not None):
             has_3d_vars = True
             list_3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
-            list_3d_vars = list_3d_vars + variables_3dto1d
+            if variables_3dto1d is not None:
+                list_3d_vars = list_3d_vars + variables_3dto1d
             if pressure_levels is None:
                 raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(list_3d_vars))
     
