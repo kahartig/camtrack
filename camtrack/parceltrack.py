@@ -72,7 +72,7 @@ class ClimateAlongTrajectory:
         trajectory path or nearest-neighbor equivalent using CAM coordinates
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, pressure_levels=None):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, pressure_levels=None, variables_3dto1d=None):
         '''
         Parameters
         ----------
@@ -91,6 +91,9 @@ class ClimateAlongTrajectory:
             pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
             Not required if none of the variables have a vertical dimension
             Default is None
+        variables_3dto1d: list of strings
+            list of 3-D CAM variables to be interpolated directly onto trajectory path,
+            collapsing pressure dimension
         '''
         # Check that all requested variables exist in CAM files
         if not all(key in winter_file.dataset.data_vars for key in variables):
@@ -101,9 +104,10 @@ class ClimateAlongTrajectory:
 
         # Check that pressure levels are provided if any 3-D variables are requested
         has_3d_vars = False # True if there are any 3-D variables requested
-        if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables):
+        if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables) or (variables_3dto1d is not None):
             has_3d_vars = True
             list_3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
+            list_3d_vars = list_3d_vars + variables_3dto1d
             if pressure_levels is None:
                 raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(list_3d_vars))
     
@@ -118,6 +122,10 @@ class ClimateAlongTrajectory:
         traj_time_da = xr.DataArray(time_coord['time'], dims=('time'), coords=time_coord)
         traj_lat_da = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
         traj_lon_da = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
+
+        # Retrieve pressure along trajectory
+        pressures = trajectories.height2pressure(cam_dir, trajectory_number)['pressure']
+        traj_pres_da = xr.DataArray(pressures.values, dims='time', coords=time_coord)
 
         # Set up interpolation to pressure levels for 3-D variables:
         if has_3d_vars:
@@ -164,9 +172,22 @@ class ClimateAlongTrajectory:
                     raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
 
             else:
-                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(
-                    key, variable_data.dims))
+                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(key, variable_data.dims))
             list_of_variables.append(values)
+
+        if variables_3dto1d is not None:
+            for key in variables_3dto1d:
+                variable_data = winter_file.variable(key)
+                # Subset first to reduce interpolation time
+                subset = variable_data.sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+                da_on_pressure_levels = winter_file.interpolate(subset, pressure_levels, interpolation=pres_interpolation, extrapolate=extrapolate, fill_value=fill_value)
+                if traj_interpolation == 'nearest':
+                    values = da_on_pressure_levels.sel(time=traj_time_da, pres=traj_pres_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
+                elif traj_interpolation == 'linear':
+                    values = da_on_pressure_levels.interp(time=traj_time_da, pres=traj_pres_da, lat=traj_lat_da, lon=traj_lon_da, method='linear', kwargs={'bounds_error': True})
+                else:
+                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
+                list_of_variables.append(values)
 
         # Store height and diagnostic output variables as well
         height_attrs = {'units': 'm above ground level', 'long_name': 'Parcel height above ground level'}
@@ -176,6 +197,7 @@ class ClimateAlongTrajectory:
             list_of_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
         
         self.data = xr.merge(list_of_variables)
+
 
     def interp_3d_onto_path(self, cam_dir, trajectories, traj_number, variables, pres_interpolation='linear', pressure_column='pressure'):
         '''
