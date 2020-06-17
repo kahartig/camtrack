@@ -12,6 +12,18 @@ Functions:
     generate_traj2save: generate a dictionary mapping between trajectory file paths and save file paths
     generate_tnum2save: generates a dictionary mapping between integer trajectory numbers and save file paths
 """
+# Standard imports
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+# Matplotlib imports
+import matplotlib.path as mpath
+from matplotlib.cm import get_cmap
+
+# Cartopy imports
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 def trajectory_path_plots(trajectory_paths):
     '''
