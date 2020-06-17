@@ -20,7 +20,7 @@ else
 fi
 
 echo "Generating winter files, starting with $((START_YEAR))-$((START_YEAR+1))"
-echo "                       and ending with $((END_YEAR-1))-$((END_YEAR+1))"
+echo "                       and ending with $((END_YEAR-1))-$((END_YEAR))"
 
 # Loop over all years
 for ((Y = $START_YEAR ; Y < $END_YEAR ; Y++)); do
@@ -29,7 +29,7 @@ for ((Y = $START_YEAR ; Y < $END_YEAR ; Y++)); do
 	echo "Starting winter $YR1-$YR2..."
 
 	TIME1=("00${YR1}-11-01 00:00:00")  # start Nov 1st
-	TIME2=("00${YR2}-03-01 00:00:00")  # end March 1st
+	TIME2=("00${YR2}-02-28 21:00:00")  # end Feb 28th
 
 	# Input file directory
 	IN_DIR=/n/tzipermanfs2/CAM-output-for-Arctic-air-suppression/PI
