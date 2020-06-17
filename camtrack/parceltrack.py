@@ -177,6 +177,29 @@ class ClimateAlongTrajectory:
         
         self.data = xr.merge(list_of_variables)
 
+    def interp_3d_onto_path(self, cam_dir, trajectories, traj_number, variables, pres_interpolation='linear', pressure_column='pressure'):
+        '''
+        Interpolate variables directly onto trajectory path, collapsing pressure dimension
+
+        Results are added to self.data Dataset
+        pressure_column: either 'pressure' (using .height2pressure) or 'PRESSURE' (from HYSPLIT)
+        '''
+        if pressure_column == 'pressure':
+            pressures = trajectories.height2pressure(cam_dir, traj_number)[pressure_column]
+        elif pressure_column == 'PRESSURE':
+            pressures = 100 * self.trajectory[pressure_column] # convert from hPa -> Pa
+        else:
+            raise ValueErorr('Invalid name for pressure column {}; must be either pressure (to use height2pressure) or PRESSURE (to use HYSPLIT pressure output)'.format(pressure_column))
+        # Construct data arrays for advanced indexing
+        time_coord = {'time': self.data['time'].values}
+        time_da = xr.DataArray(time_coord['time'], dims='time', coords=time_coord)
+        pres_da = xr.DataArray(pressures.values, dims='time', coords=time_coord)
+
+        for var in variables:
+            values = self.data[var].interp(time=time_da, pres=pres_da, method=pres_interpolation)
+            self.data[var + '_1d'] = values
+
+
     def trajectory_plot(self, save_file_path=None):
         '''
         Either saves or displays a map of trajectory path
