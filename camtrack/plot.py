@@ -25,6 +25,9 @@ from matplotlib.cm import get_cmap
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
+# camtrack import
+import camtrack as ct
+
 def trajectory_path_plots(trajectory_paths):
     '''
     For each event index from 0 to num_events-1, save North Polar Stereo plot of
