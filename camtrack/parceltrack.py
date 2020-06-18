@@ -166,13 +166,13 @@ class ClimateAlongTrajectory:
 
         # Three-dimensional climate variables
         elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
+            # Set up for vertical interpolation if it has never been done before
+            if not hassattr(self, 'pressure_levels'):
+                self.setup_pinterp(pressure_levels)
             # Subset first to reduce interpolation time
             subset = variable_data.sel(time=self.subset_time, lat=self.subset_lat, lon=self.subset_lon)
             da_on_pressure_levels = self.winter_file.interpolate(subset, self.pressure_levels, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
             if to_1D:
-                # Set up for vertical interpolation if it has never been done before
-                if not hassattr(self, 'pressure_levels'):
-                    self.setup_pinterp(pressure_levels)
                 # Interpolate onto trajectory pressure to collapse vertical dimension
                 if self.traj_interpolation == 'nearest':
                     values = da_on_pressure_levels.sel(time=self.traj_time, pres=traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
