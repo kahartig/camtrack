@@ -97,7 +97,6 @@ class ClimateAlongTrajectory:
         self.traj_file = trajectories
         self.traj_interpolation = traj_interpolation
         self.traj_number = trajectory_number
-        self.pressure_levels = pressure_levels
 
         # Check that all requested variables exist in CAM files
         if not all(key in winter_file.dataset.data_vars for key in variables):
@@ -126,16 +125,7 @@ class ClimateAlongTrajectory:
 
         # Set up interpolation to pressure levels for 3-D variables:
         if has_3d_vars:
-            #    set up subset to trajectory path        
-            lat_pad = 2. * max(abs(np.diff(self.traj_lat.values)))
-            lon_pad = 2. * max(abs(np.diff(self.traj_lon.values)))
-            self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
-            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
-            self.subset_time = self.traj_time.values
-            #    inputs for vertical interpolation function
-            self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
-            self.pres_extrapolate = False  # for Ngl.vinth2p
-            self.fill_value = np.nan  # for winter_file.interpolate
+            self.setup_pinterp(pressure_levels)
         
         # Store height and diagnostic output variables
         list_of_variables = []
@@ -151,7 +141,7 @@ class ClimateAlongTrajectory:
             self.add_variable(key)
 
 
-    def add_variable(self, variable, to_1D=False):
+    def add_variable(self, variable, to_1D=False, pressure_levels=None):
         '''
         DOC
 
@@ -180,7 +170,10 @@ class ClimateAlongTrajectory:
             subset = variable_data.sel(time=self.subset_time, lat=self.subset_lat, lon=self.subset_lon)
             da_on_pressure_levels = self.winter_file.interpolate(subset, self.pressure_levels, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
             if to_1D:
-                # Also interpolate onto trajectory pressure to collapse vertical dimension
+                # Set up for vertical interpolation if it has never been done before
+                if not hassattr(self, 'pressure_levels'):
+                    self.setup_pinterp(pressure_levels)
+                # Interpolate onto trajectory pressure to collapse vertical dimension
                 if self.traj_interpolation == 'nearest':
                     values = da_on_pressure_levels.sel(time=self.traj_time, pres=traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
                 elif self.traj_interpolation == 'linear':
@@ -200,6 +193,26 @@ class ClimateAlongTrajectory:
         
         # Update Dataset with new DataArray
         self.data[variable] = values
+
+    def setup_pinterp(self, pressure_levels):
+        '''
+        DOC
+        '''
+        if pressure_levels is not None:
+            self.pressure_levels = pressure_levels
+            #    set up subset to trajectory path        
+            lat_pad = 2. * max(abs(np.diff(self.traj_lat.values)))
+            lon_pad = 2. * max(abs(np.diff(self.traj_lon.values)))
+            self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
+            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
+            self.subset_time = self.traj_time.values
+            #    inputs for vertical interpolation function
+            self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
+            self.pres_extrapolate = False  # for Ngl.vinth2p
+            self.fill_value = np.nan  # for winter_file.interpolate
+        else:
+            raise NameError('pressure_levels has not been defined, please provide an array of pressure values in Pa to interpolate onto')
+
 
     def interp_3d_onto_path(self, cam_dir, trajectories, traj_number, variables, pres_interpolation='linear', pressure_column='pressure'):
         '''
