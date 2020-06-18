@@ -152,49 +152,20 @@ class ClimateAlongTrajectory:
             self.pres_interpolation = pres_interpolation
             self.extrapolate = extrapolate
             self.fill_value = fill_value
-
-        # Map trajectory times to climate variables
-        # xarray supports vectorized indexing across multiple dimensions
-        # (pulling a series of points by matching up lists of each coordinate)
-        # as long as DataArrays are used for indexing. If lists were provided
-        # instead, xarray would use orthogonal indexing
+        
+        # Store height and diagnostic output variables
         list_of_variables = []
-        for key in variables:
-            variable_data = winter_file.variable(key)
-
-            # Two-dimensional climate variables
-            if variable_data.dims == ('time', 'lat', 'lon'):
-                if traj_interpolation == 'nearest':
-                    values = variable_data.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
-                elif traj_interpolation == 'linear':
-                    values = variable_data.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear', kwargs={'bounds_error': True})
-                else:
-                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
-
-            # Three-dimensional climate variables
-            elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
-                # Subset first to reduce interpolation time
-                subset = variable_data.sel(time=time_slice, lat=lat_slice, lon=lon_slice)
-                da_on_pressure_levels = winter_file.interpolate(subset, pressure_levels, interpolation=pres_interpolation, extrapolate=extrapolate, fill_value=fill_value)
-                if traj_interpolation == 'nearest':
-                    values = da_on_pressure_levels.sel(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='nearest')
-                elif traj_interpolation == 'linear':
-                    values = da_on_pressure_levels.interp(time=traj_time_da, lat=traj_lat_da, lon=traj_lon_da, method='linear', kwargs={'bounds_error': True})
-                else:
-                    raise ValueError("Invalid interpolation method {}. Must be 'nearest' or 'linear'".format(traj_interpolation))
-
-            else:
-                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(key, variable_data.dims))
-            list_of_variables.append(values)
-
-        # Store height and diagnostic output variables as well
         height_attrs = {'units': 'm above ground level', 'long_name': 'Parcel height above ground level'}
         list_of_variables.append(xr.DataArray(self.trajectory['height (m)'].values, name='HEIGHT', attrs=height_attrs, dims=('time'), coords=time_coord))
         for key in trajectories.diag_var_names:
             key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
             list_of_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
-        
-        self.data = xr.merge(list_of_variables)
+        self.data = xr.merge(list_of_variables)        
+
+        # Store requested climate variables
+        for key in variables:
+            self.add_variable(key)
+
 
     def add_variable(self, variable, to_1D=False):
         '''
