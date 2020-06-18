@@ -302,28 +302,40 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
 
         # Save all events at same height
         all_events = []
+        all_ages = []
         for traj_path in trajectory_list:
             trajfile = ct.TrajectoryFile(traj_path)
             camfile = ct.WinterCAM(cam_dir, trajfile)
-            all_events.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method))
+            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
+            all_events.append(cat)
+            all_ages.append(cat.trajectory.index.values)
+        max_age = max(len(age) for age in all_ages)
         
         # Plot all variables
         for var_idx, variable in enumerate(var_to_plot):
             axs[var_idx].set_xlabel('Trajectory Age (hours)')
+            sum_all_events = np.ma.empty((len(all_events), max_age))
+            sum_all_events.mask = True
             if variable == 'Net cloud forcing':
                 sample_data = all_events[0].data['LWCF']
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title('LWCF + SWCF: Net cloud forcing')
-                for ev_idx,ev in enumerate(all_events):
-                    time = ev.trajectory.index.values
-                    axs[var_idx].plot(time, ev.data['LWCF'].values + ev.data['SWCF'].values, '-', linewidth=0.5, c='lightsteelblue')
+                for ev_idx, ev in enumerate(all_events):
+                    time = all_ages[ev_idx]
+                    plot_data = ev.data['LWCF'].values + ev.data['SWCF'].values
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
             else:
                 sample_data = all_events[0].data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
-                for ev in all_events:
-                    time = ev.trajectory.index.values
-                    axs[var_idx].plot(time, ev.data[variable].values, '-', linewidth=0.5, c='lightsteelblue')
+                for ev_idx, ev in enumerate(all_events):
+                    time = all_ages[ev_idx]
+                    plot_data = ev.data[variable].values
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
+            avg_all_events = sum_all_events.mean(axis=0)
+            axs[var_idx].plot(max(all_ages, key=len), avg_all_events, '-', linewidth=2., c='steelblue')
 
         plt.tight_layout(h_pad=2.0)
         if saving:
