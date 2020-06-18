@@ -454,6 +454,9 @@ class WinterCAM:
                 e.g. for 0009-0010 winter, winter='0910'
             mutually exclusive with trajectories
         '''
+        # Store source directory
+        self.directory = file_dir
+        
         # Open the CAM files with xarray
         if (trajectories is None) and (winter is None):
             # Read in a single netCDF file
