@@ -245,7 +245,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             ax.clear()
     plt.close()
 
-def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir):
+def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
     '''
     For each trajectory number from 1 to num_traj, generate line plots of
     climate variables across all events.
@@ -281,6 +281,10 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         interpolation method for matching trajectory lat-lon to CAM variables
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
+    pressure_levels: array-like of floats
+        pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
+        Only used if requesting 3-D variables interpolated directly onto trajectory path
+        Default is None
     '''
     # Parse input arguments
     if isinstance(traj_numbers, dict):
@@ -335,6 +339,17 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
                     plot_data = ev.data['LWCF'].values + ev.data['SWCF'].values
                     sum_all_events[ev_idx, -len(time):] = plot_data
                     axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
+            elif variable[-3:] == '_1D':
+                variable_key = variable[:-3]
+                for ev_idx, ev in enumerate(all_events):
+                    time = all_ages[ev_idx]
+                    ev.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
+                    plot_data = ev.data[variable].values
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
+                sample_data = ev.data[variable]
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
             else:
                 sample_data = all_events[0].data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
