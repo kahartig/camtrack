@@ -97,6 +97,7 @@ class ClimateAlongTrajectory:
         self.traj_file = trajectories
         self.traj_interpolation = traj_interpolation
         self.traj_number = trajectory_number
+        self.pressure_levels = pressure_levels
 
         # Check that all requested variables exist in CAM files
         if not all(key in winter_file.dataset.data_vars for key in variables):
@@ -116,42 +117,25 @@ class ClimateAlongTrajectory:
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
         self.direction = trajectories.direction
-        #print('Starting position for trajectory {}:'.format(trajectory_number))
-        #print('    {:.2f}N lat, {:.2f}E lon, {:.0f} m above ground'.format(trajectories.loc[(trajectory_number,0)]['lon'],trajectories.loc[(trajectory_number, 0)]['lat'],trajectories.loc[(trajectory_number, 0)]['height (m)']))
 
         # Retrieve time, lat, lon along trajectory
         time_coord = {'time': self.trajectory['cftime date'].values}
-        traj_time_da = xr.DataArray(time_coord['time'], dims=('time'), coords=time_coord)
-        traj_lat_da = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
-        traj_lon_da = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
-        self.traj_time = traj_time_da
-        self.traj_lat = traj_lat_da
-        self.traj_lon = traj_lon_da
-
-        # Retrieve pressure along trajectory
-        #pressures = trajectories.height2pressure(cam_dir, trajectory_number)['pressure']
-        #traj_pres_da = xr.DataArray(pressures.values, dims='time', coords=time_coord)
+        self.traj_time = xr.DataArray(time_coord['time'], dims=('time'), coords=time_coord)
+        self.traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
+        self.traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
         # Set up interpolation to pressure levels for 3-D variables:
         if has_3d_vars:
             #    set up subset to trajectory path        
-            lat_pad = 2. * max(abs(np.diff(traj_lat_da.values)))
-            lon_pad = 2. * max(abs(np.diff(traj_lon_da.values)))
-            lat_slice = slice(min(traj_lat_da.values) - lat_pad, max(traj_lat_da.values) + lat_pad)
-            lon_slice = slice(min(traj_lon_da.values) - lon_pad, max(traj_lon_da.values) + lon_pad)
-            time_slice = traj_time_da.values
-            self.subset_time = time_slice
-            self.subset_lat = lat_slice
-            self.subset_lon = lon_slice
+            lat_pad = 2. * max(abs(np.diff(self.traj_lat.values)))
+            lon_pad = 2. * max(abs(np.diff(self.traj_lon.values)))
+            self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
+            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
+            self.subset_time = self.traj_time.values
             #    inputs for vertical interpolation function
-            self.pressure_levels = pressure_levels
-            pressure_levels_mb = pressure_levels/100 # required by Ngl.vinth2p
-            pres_interpolation = 'linear' # for Ngl.vinth2p; options=linear, log, log-log
-            extrapolate = False # for Ngl.vinth2p
-            fill_value = np.nan
-            self.pres_interpolation = pres_interpolation
-            self.extrapolate = extrapolate
-            self.fill_value = fill_value
+            self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
+            self.pres_extrapolate = False  # for Ngl.vinth2p
+            self.fill_value = np.nan  # for winter_file.interpolate
         
         # Store height and diagnostic output variables
         list_of_variables = []
@@ -194,7 +178,7 @@ class ClimateAlongTrajectory:
         elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
             # Subset first to reduce interpolation time
             subset = variable_data.sel(time=self.subset_time, lat=self.subset_lat, lon=self.subset_lon)
-            da_on_pressure_levels = self.winter_file.interpolate(subset, self.pressure_levels, interpolation=self.pres_interpolation, extrapolate=self.extrapolate, fill_value=self.fill_value)
+            da_on_pressure_levels = self.winter_file.interpolate(subset, self.pressure_levels, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
             if to_1D:
                 # Also interpolate onto trajectory pressure to collapse vertical dimension
                 if self.traj_interpolation == 'nearest':
