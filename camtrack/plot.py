@@ -129,7 +129,7 @@ def trajectory_path_plots(trajectory_paths):
     plt.close()
 
 
-def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir):
+def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
     '''
     For each event index from 0 to num_events-1, generate line plots of climate
     variables along all trajectories
@@ -167,6 +167,10 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
     save_dir: path-like or string
         path to directory where trajectory plots will be saved
         output file name format is 'traj_plot_event<event idx>.png'
+    pressure_levels: array-like of floats
+        pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
+        Only used if requesting 3-D variables interpolated directly onto trajectory path
+        Default is None
     '''
     # Parse input argument
     if isinstance(trajectory_paths, dict):
@@ -219,11 +223,17 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
                     time = traj.trajectory.index.values
                     axs[var_idx].plot(time, traj.data['LWCF'].values + traj.data['SWCF'].values, '-o', linewidth=2, c=c_height[traj_idx])
             else:
-                sample_data = all_trajectories[0].data[variable]
+                if variable[-3:] == '_1D':
+                    variable_key = variable[:-3]
+                else:
+                    variable_key = variable
+                sample_data = camfile.variable(variable_key)
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
                 for traj_idx,traj in enumerate(all_trajectories):
                     time = traj.trajectory.index.values
+                    if variable[-3:] == '_1D':
+                        traj.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
                     axs[var_idx].plot(time, traj.data[variable].values, '-o', linewidth=2, c=c_height[traj_idx])
         plt.tight_layout(h_pad=2.0)
         if saving:
