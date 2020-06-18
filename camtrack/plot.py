@@ -225,9 +225,9 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             else:
                 if variable[-3:] == '_1D':
                     variable_key = variable[:-3]
+                    sample_data = camfile.variable(variable_key)
                 else:
-                    variable_key = variable
-                sample_data = camfile.variable(variable_key)
+                    sample_data = all_trajectories[0].data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
                 for traj_idx,traj in enumerate(all_trajectories):
