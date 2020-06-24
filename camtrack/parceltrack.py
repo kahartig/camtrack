@@ -201,8 +201,8 @@ class ClimateAlongTrajectory:
         if pressure_levels is not None:
             self.pressure_levels = pressure_levels
             #    set up subset to trajectory path        
-            lat_pad = 2. * max(abs(np.diff(self.traj_lat.values)))
-            lon_pad = 2. * max(abs(np.diff(self.traj_lon.values)))
+            lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
+            lon_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lon'))))
             self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
             self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
             self.subset_time = self.traj_time.values
