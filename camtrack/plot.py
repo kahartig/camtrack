@@ -497,7 +497,7 @@ def generate_tnum2save(num_traj, save_dir, save_prefix):
     Assumes save file name format save_prefix + '_trajXX.png' where XX runs from 01 to num_traj
     '''
     tnum2save_dict = {}
-    for traj_number in range(1, num_trajs + 1):
+    for traj_number in range(1, num_traj + 1):
         save_path = os.path.join(save_dir, save_prefix + '_traj{:02d}.png'.format(traj_number))
         tnum2save_dict[traj_number] = save_path
     return tnum2save_dict
