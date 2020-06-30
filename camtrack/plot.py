@@ -20,6 +20,7 @@ import os
 # Matplotlib imports
 import matplotlib.path as mpath
 from matplotlib.cm import get_cmap
+from matplotlib.collections import LineCollection
 
 # Cartopy imports
 import cartopy.crs as ccrs
@@ -127,6 +128,120 @@ def trajectory_path_plots(trajectory_paths):
             plt.show()
         ax.clear()
     plt.close()
+
+
+def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None):
+    '''
+    For the given trajectory paths and trajectory number, generate a plot of the
+    trajectory path overlaid by instantaneous horizontal wind vectors and,
+    optionally, colored by parcel height
+
+    color = None (single color by initial height) or 'HEIGHT'
+    '''
+    # Parse input argument
+    if isinstance(trajectory_paths, dict):
+        saving = True
+        path_list = list(trajectory_paths.keys())
+    elif isinstance(trajectory_paths, list):
+        saving = False
+        path_list = trajectory_paths
+    else:
+        raise TypeError('trajectory_paths must be either a dictionary of trajectory : savefile path \
+            pairs or a list of trajectory paths, not {}'.format(type(trajectory_paths)))
+
+    # Initialize plot
+    plt.rcParams.update({'font.size': 14})  # set overall font size
+    deg = u'\N{DEGREE SIGN}'
+
+    for traj_path in path_list:
+        if saving:
+            save_file_path = trajectory_paths[traj_path]
+        fig, ax = plt.subplots(1, 1, figsize=(10,10), subplot_kw={'projection': ccrs.NorthPolarStereo()})
+
+        trajfile = ct.TrajectoryFile(traj_path)
+
+        # Set map projection
+        ax.set_global()
+        min_plot_lat = 50 if all(trajfile.data['lat'].values > 50) else min(
+            trajfile.data['lat'].values) - 5
+        ax.set_extent([-180, 180, min_plot_lat, 90], crs=ccrs.PlateCarree())
+
+        # Add features
+        ax.add_feature(cfeature.LAND)
+        ax.add_feature(cfeature.COASTLINE)
+        ax.gridlines(color='black', linestyle='dotted')
+
+        # Set circular outer boundary
+        theta = np.linspace(0, 2 * np.pi, 100)
+        center, radius = [0.5, 0.5], 0.5
+        verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+        circle = mpath.Path(verts * radius + center)
+        ax.set_boundary(circle, transform=ax.transAxes)
+        
+        # Interpolate wind onto path
+        winter_file = ct.WinterCAM(cam_dir, trajfile)
+        pressure_levels = np.linspace(1.2e5, 300, 40)
+        cat = ct.ClimateAlongTrajectory(winter_file, trajfile, traj_number, ['TREFHT'], 'linear')
+        cat.add_variable('U', True, pressure_levels)
+        cat.add_variable('V', True)
+        lats = cat.data['lat'].values
+        lons = cat.data['lon'].values
+        u_wind = cat.data['U_1D'].values
+        v_wind = cat.data['V_1D'].values
+
+        # Plot start point as a black X
+        ax.scatter(trajfile.traj_start['lon'], trajfile.traj_start['lat'],
+            s=150, c='k', marker='X', transform=ccrs.Geodetic(), zorder=4)
+
+        # Set up coloring scheme
+        if color is None:
+            cm_height = plt.get_cmap('inferno') # colormap for trajectory height
+            n_heights = len(trajfile.traj_start['height'])
+            c_height = cm_height(np.linspace(0.2, 0.8, n_heights))
+        elif color == 'HEIGHT':
+            heights = cat.data['HEIGHT'].values
+            points = np.array([lons, lats]).T.reshape(-1, 1, 2)
+            segments = np.concatenate([points[:-1], points[1:]], axis=1)
+            norm = plt.Normalize(min(heights), max(heights))
+        else:
+            raise ValueError('color must be None (default; single color based on initial height) or HEIGHT; given {}'.format(color))
+
+        # Loop over trajectory heights
+        trajectory = trajfile.get_trajectory(traj_number, 3)
+        max_age = min(trajectory.index.values)
+        initial_height = trajectory.loc[0]['height (m)']
+        # Plot trajectory path
+        if color is None:
+            ax.plot(trajectory['lon'].values, trajectory['lat'].values,
+                    color=c_height[traj_number-1],
+                    label='{:.0f} m'.format(initial_height),
+                    linewidth=2.5, transform=ccrs.Geodetic(), zorder=1)
+        elif color == 'HEIGHT':
+            lc = LineCollection(segments, cmap='plasma', norm=norm)
+            lc.set(array=heights, label='{:.0f} m'.format(initial_height),
+                   linewidth=5, transform=ccrs.Geodetic(), zorder=5)
+            line = ax.add_collection(lc)
+            cb = fig.colorbar(line, ax=ax, shrink=0.6, pad=0.02)
+        # Mark end point of trajectory
+        ax.scatter(trajectory.loc[max_age]['lon'], trajectory.loc[max_age]['lat'],
+                   s=75, c='tab:gray', marker='o', transform=ccrs.Geodetic(),
+                   zorder=3)
+        # Add wind vectors
+        ax.quiver(lons[::5], lats[::5], u_wind[::5], v_wind[::5],
+                  transform=ccrs.PlateCarree(), zorder=2)
+
+        # Add title
+        traj_file_name = os.path.basename(traj_path)
+        date_string = '{:04.0f}-{:02.0f}-{:02.0f}'.format(trajfile.traj_start.loc[0]['year'], trajfile.traj_start.loc[0]['month'], trajfile.traj_start.loc[0]['day'])
+        ax.set(title='{} on {} starting at {:.01f}{}N, {:.01f}{}E'.format(traj_file_name, date_string, trajfile.traj_start.loc[0]['lat'], deg, trajfile.traj_start.loc[0]['lon'], deg))
+        ax.legend(loc='upper right')
+
+        if saving:
+            fig.savefig(save_file_path)
+            print('Finished saving path for {}...'.format(traj_file_name))
+        else:
+            plt.show()
+        plt.close()
 
 
 def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
