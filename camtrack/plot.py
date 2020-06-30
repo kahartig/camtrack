@@ -571,11 +571,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
             print('Finished saving contour plot for {}...'.format(traj_file_name))
         else:
             plt.show()
-        for ax in axs:
-            ax.clear()
-        for cb in cbars:
-            cb.remove()
-    plt.close()
+        plt.close()
 
 def generate_trajlist(num_events, traj_dir):
     '''
