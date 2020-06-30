@@ -419,18 +419,14 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
 
     # Initialize plot
     num_plots = len(cam_variables)
-    if saving:
-        # a single figure will be saved and then over-written for each loop
-        fig, axs = plt.subplots(num_plots, 1, figsize=(8, 6*num_plots))
     cm = plt.get_cmap('viridis')
     num_contours = 15
 
     for traj_path in path_list:
         if saving:
             save_file_path = trajectory_paths[traj_path]
-        else:
-            # a new figure for each loop to be displayed
-            fig, axs = plt.subplots(num_plots, 1, figsize=(8, 6*num_plots))
+        fig, axs = plt.subplots(num_plots, 1, figsize=(8, 6*num_plots))
+        cbars = [0] * len(axs)
         traj_file_name = os.path.basename(traj_path)
         print('Starting event {}'.format(traj_file_name))
 
@@ -452,7 +448,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
             contour_data = np.transpose(cat.data[variable].values)
             contour = axs[var_idx].contourf(mesh_time, mesh_pres, contour_data, num_contours, cmap=cm)
             axs[var_idx].plot(heights.index.values, heights.values, '-', lw=2, c='black')
-            fig.colorbar(contour, ax=axs[var_idx], shrink=0.6, pad=0.02, label=var_label)
+            cbars[var_idx] = fig.colorbar(contour, ax=axs[var_idx], shrink=0.6, pad=0.02, label=var_label)
 
         plt.tight_layout(h_pad=2.0)
         if saving:
@@ -462,6 +458,8 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
             plt.show()
         for ax in axs:
             ax.clear()
+        for cb in cbars:
+            cb.remove()
     plt.close()
 
 def generate_trajlist(num_events, traj_dir):
