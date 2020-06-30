@@ -244,6 +244,37 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None
         plt.close()
 
 
+def trajectory_endpoints_plot(trajectory_list, save_file_path=None):
+    '''
+    Plot endpoints of all trajectories in trajectory_list
+
+    save_file_path is None (print to screen) or path
+    '''
+    # Initialize plot
+    plt.rcParams.update({'font.size': 14})  # set overall font size
+    fig, ax = plt.subplots(1, 1, figsize=(10,10), subplot_kw={'projection': ccrs.PlateCarree()})
+    ax.set_extent([-130, -60, 25, 60], crs=ccrs.PlateCarree())
+    ax.add_feature(cfeature.LAND)
+    ax.add_feature(cfeature.COASTLINE)
+    ax.gridlines(color='black', linestyle='dotted')
+    ax.set_title('Endpoints of all trajectories')
+
+    # Retrieve and plot endpoints of all events
+    for traj_path in trajectory_list:
+        event_str = traj_path[-7:-5]
+        trajfile = ct.TrajectoryFile(traj_path)
+        start_point = trajfile.traj_start.loc[1]
+        ax.scatter(start_point['lon'], start_point['lat'], s=100, c='tab:purple', marker='o', alpha=0.7, transform=ccrs.PlateCarree())
+        ax.annotate(event_str, (start_point['lon'], start_point['lat']), xytext=(5, 5), textcoords='offset pixels')
+
+    # Save or print to screen
+    if save_file_path is None:
+        plt.show()
+    else:
+        fig.savefig(save_file_path)
+    plt.close()
+
+
 def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
     '''
     For each event index from 0 to num_events-1, generate line plots of climate
