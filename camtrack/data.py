@@ -588,7 +588,21 @@ class WinterCAM:
                 few order of magnitude before interpolating'.format(
                     replacement_threshold))
 
-        on_p_levels = Ngl.vinth2p(variable_da.values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
+        # If interpolating temperature, add on surface temperatures
+        variable_values = variable_da.values
+        if variable_da.name == 'T':
+            hyam_surf = 0.
+            hybm_surf = 0.999
+            hyam = np.append(self.variable('hyam').values, hyam_surf)
+            hybm = np.append(self.variable('hybm').values, hybm_surf)
+            # Add singleton 'lev' dimension to TREFHT (surface temperature)
+            T_surf = self.variable('TREFHT').sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+            T_surf_newcoord = T_surf.assign_coords(lev=1000*(hyam_surf + hybm_surf))
+            T_surf_expanded = T_surf_newcoord.expand_dims('lev')
+            # Concatenate TREFHT onto T
+            variable_values = xr.concat([variable_da, T_surf_expanded], dim='lev').values
+
+        on_p_levels = Ngl.vinth2p(variable_values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
         
         # If extrapolation is False, replace default fill value
         # (1e30 > replacement_threshold) with designated fill_value
