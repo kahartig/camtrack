@@ -147,12 +147,7 @@ class ClimateAlongTrajectory:
 
         if variable is 3-D+time and to_1D is True, will also interp onto trajectory pressure to collapse vertical dimension
         '''
-        original_variable_data = self.winter_file.variable(variable)
-
-        # Represent periodicity in longitude by repeating lon=0 as lon=360
-        lon_0 = original_variable_data.sel(lon=0.)
-        lon_360 = lon_0.assign_coords(lon=360.)
-        variable_data = xr.concat([original_variable_data, lon_360], dim='lon')
+        variable_data = self.winter_file.variable(variable)
 
         # if interpolating 3-D onto 1-D, find pressures along trajectory
         if to_1D:
