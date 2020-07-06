@@ -189,10 +189,6 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None
         u_wind = cat.data['U_1D'].values
         v_wind = cat.data['V_1D'].values
 
-        # Plot start point as a black X
-        ax.scatter(trajfile.traj_start['lon'], trajfile.traj_start['lat'],
-            s=150, c='k', marker='X', transform=ccrs.Geodetic(), zorder=4)
-
         # Set up coloring scheme
         if color is None:
             cm_height = plt.get_cmap('inferno') # colormap for trajectory height
@@ -219,13 +215,9 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None
         elif color == 'HEIGHT':
             lc = LineCollection(segments, cmap='plasma', norm=norm)
             lc.set(array=heights, label='{:.0f} m'.format(initial_height),
-                   linewidth=5, transform=ccrs.Geodetic(), zorder=5)
+                   linewidth=5, transform=ccrs.Geodetic(), zorder=1)
             line = ax.add_collection(lc)
             cb = fig.colorbar(line, ax=ax, shrink=0.6, pad=0.02)
-        # Mark end point of trajectory
-        ax.scatter(trajectory.loc[max_age]['lon'], trajectory.loc[max_age]['lat'],
-                   s=75, c='tab:gray', marker='o', transform=ccrs.Geodetic(),
-                   zorder=3)
         # Add wind vectors
         ax.quiver(lons[::5], lats[::5], u_wind[::5], v_wind[::5],
                   transform=ccrs.PlateCarree(), zorder=2)
