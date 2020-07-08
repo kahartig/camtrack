@@ -98,12 +98,12 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     sample_lon, sample_lon_idx = samples2values(samples, sorted_idx[2], longitudes)
     sample_temp_anomaly = [temperature_anomaly[t, la, lo] for t,la,lo in zip(sample_times_idx, sample_lat_idx, sample_lon_idx)]
 
-    # Convert sampled times to numerical time and datestring
-    numerical_times = cftime.date2num(sample_times, 'days since 0001-01-01 00:00:00', calendar='noleap')
+    # Convert sampled times to ordinal time and datestring
+    ordinal_times = cftime.date2num(sample_times, 'days since 0001-01-01 00:00:00', calendar='noleap')
     datestrings = [t.strftime() for t in sample_times]
 
     # Construct cold_events DataFrame
-    cold_events = pd.DataFrame.from_dict({'time': numerical_times, 'date': datestrings, 'cftime date': sample_times, 'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
+    cold_events = pd.DataFrame.from_dict({'time': ordinal_times, 'date': datestrings, 'cftime date': sample_times, 'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
     print("Randomly sampled {} events from the {}-{} percentile range of temperature anomalies from DJF mean".format(number_of_events, percentile_range[0], percentile_range[1]))
     return cold_events
 

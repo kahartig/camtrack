@@ -64,11 +64,11 @@ class TrajectoryFile:
             EX: to access trajectory 3 at time -5 hours, use data.loc[3, -5]
         columns: grid #, year, month, day, hour, minute, fhour, lat, lon,
             height (m), <any diagnostic variables...>, datetime, cftime date,
-            numerical time
+            ordinal time
         note that there are three equivalent representations of time:
             datetime: str; 'YYYY-MM-DD HH:MM:SS'
             cftime date: cftime.DatetimeNoLeap()
-            numerical time: float; days since 0001-01-01 00:00:00
+            ordinal time: float; days since 0001-01-01 00:00:00
     data_1h: pandas DataFrame
         same as data, but every hour
     data_12h: pandas DataFrame
@@ -212,12 +212,12 @@ class TrajectoryFile:
         trajectories['cftime date'] = trajectories.apply(
             traj_cftimedate, axis=1)
 
-        # new column: numerical time (days since 0001-01-01 00:00:00)
+        # new column: ordinal time (days since 0001-01-01 00:00:00)
         # min_time = cftime.date2num(cftime.datetime(7 + winter_idx, 12, 1),
         # time_object.units, calendar=time_object.calendar)
         def traj_numtime(row):
             return cftime.date2num(row['cftime date'], units='days since 0001-01-01 00:00:00', calendar='noleap')
-        trajectories['numerical time'] = trajectories.apply(
+        trajectories['ordinal time'] = trajectories.apply(
             traj_numtime, axis=1)
 
         # Store trajectories in increments of 1 hour and 3 hours
@@ -487,13 +487,13 @@ class WinterCAM:
             ds4 = ds4.drop_vars(dropped_vars, errors='ignore')
             dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
 
-        # Add numerical time coordinate
+        # Add ordinal time coordinate
         # NOTE: time units are an assumption; cannot retrieve the units
         # directly from the cftime.DatetimeNoLeap object
         self.time_units = 'days since 0001-01-01 00:00:00' # by assumption
         self.time_calendar = dataset.time.item(0).calendar
-        numerical_times = cftime.date2num(dataset['time'], units=self.time_units, calendar=self.time_calendar)
-        self.dataset = dataset.assign_coords({'numerical_time': ('time', numerical_times)})
+        ordinal_times = cftime.date2num(dataset['time'], units=self.time_units, calendar=self.time_calendar)
+        self.dataset = dataset.assign_coords({'ordinal_time': ('time', ordinal_times)})
 
     def variable(self, key):
         '''
@@ -716,13 +716,13 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         # Output trajectory file name:
         f.write('traj_event{:02d}.traj\n'.format(event_ID))
 
-def winter_string(numerical_time, out_format):
+def winter_string(ordinal_time, out_format):
     '''
     Return year(s) corresponding to the winter spanning the given time
 
     Parameters
     ----------
-    numerical_time: float
+    ordinal_time: float
         number of days since 0001-01-01 00:00:00 on a noleap calendar
     out_format: string
         output format; must be 'first' or 'first-second' or 'firstsecond'
@@ -737,7 +737,7 @@ def winter_string(numerical_time, out_format):
         year(s) corresponding to the winter that spans the given time. Output
         format specified by out_format argument
     '''
-    date_time = cftime.num2date(numerical_time, 'days since 0001-01-01 00:00:00', calendar='noleap')
+    date_time = cftime.num2date(ordinal_time, 'days since 0001-01-01 00:00:00', calendar='noleap')
     if date_time.month > 6:
         start_year = date_time.year
     else:
