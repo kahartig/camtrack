@@ -114,6 +114,13 @@ class ClimateAlongTrajectory:
         self.traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
         self.traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
 
+        # Set up subset to trajectory path        
+        lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
+        lon_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lon'))))
+        self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
+        self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
+        self.subset_time = slice(min(self.traj_time.values), max(self.traj_time.values))
+
         # Set up interpolation to pressure levels for 3-D variables:
         if has_3d_vars:
             self.setup_pinterp(pressure_levels)
@@ -191,12 +198,6 @@ class ClimateAlongTrajectory:
         '''
         if pressure_levels is not None:
             self.pressure_levels = pressure_levels
-            #    set up subset to trajectory path        
-            lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
-            lon_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lon'))))
-            self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
-            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
-            self.subset_time = self.traj_time.values
             #    inputs for vertical interpolation function
             self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
             self.pres_extrapolate = False  # for Ngl.vinth2p
