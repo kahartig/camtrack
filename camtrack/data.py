@@ -7,8 +7,6 @@ Classes:
     TrajectoryFile:  read in and store data from HYSPLIT .traj file
     WinterCAM:  read in and store data from CAM4 winter (Nov-Feb) file
 Functions:
-    subset_nc:  subset a netCDF file by time, latitude, and longitude
-    slice_dim:  given coordinate bounds, generate index slice for corresponding dimension
     make_CONTROL:  print a CONTROL file for running HYSPLIT trajectories
     winter_string:  return years corresponding to the winter in which a given time falls
 
@@ -24,7 +22,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xarray as xr
 import pandas as pd
-from netCDF4 import Dataset
 import os
 import cftime
 import calendar
@@ -637,188 +634,6 @@ def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_boun
     subset_mask = winter_file.variable(mask_by).sel(time=time_slice, lat=lat_slice, lon=lon_slice)
     masked_variable = subset_variable.where(subset_mask > mask_threshold, np.nan)
     return masked_variable
-
-
-def subset_nc(filename, winter_idx, desired_variable_key, lat_bounds, lon_bounds, landfrac_min=0.9, testing=False):
-    '''
-    Take a subset in time and lat/lon of the variable specified by
-    desired_variable_key from filename and mask by landfraction. The time subset
-    runs from December 1st through February 28th of the following year and the
-    spatial extent must include the north pole, requiring only a lower bound for
-    latitude.
-
-    Parameters
-    ----------
-    filename: string
-        path to netCDF file of CAM4 output covering at least Dec through Feb of
-        a given year
-    winter_idx: integer
-        index of winter under study. 0 is 07-08 year, 1 is 08-09, etc.
-    desired_variable_key: string
-        key of variable to be subset by time, latitude, and longitude
-        the corresponding data must have the dimensions data[time, lat, lon]
-    lat_bounds: array-like of floats
-        lower and upper bounds of latitude range for the subset
-        must be in the order (lower bound, upper bound)
-        latitude subset = [lat_bounds[0], lat_bounds[1]]
-    lon_bounds: array-like of floats
-        lower and upper bounds of longitude range for the subset
-        must be in the order (lower bound, upper bound)
-        longitude subset = [lon_bounds[0], lon_bounds[1]]
-    landfrac_min: float between 0 and 1
-        minimum value of landfraction for which a gridpoint will be considered
-        "on land"
-    testing: boolean
-        if testing=True, activates special conditions on time bounds and output
-        for nosetests
-        default is False
-
-    Returns
-    -------
-    subset_dict: dictionary
-        'data': a subset from time=Dec 1st - Feb 28th,
-            latitude=[lat_bounds[0], lat_bounds[1]],
-            longitude=[lon_bounds[0], lon_bounds[1]] of the variable
-            desired_variable_key, masked by landfraction so that any points with
-            landfraction < landfrac_min have a value of np.nan
-        'time': array of ordinal time values corresponding to subsetted time
-            dimension
-        'lat': array of latitudes corresponding to subsetted lat dimension
-        'lon': array of longitudes corresponding to subsetted lon dimension
-        if testing=True, also includes:
-            'unmasked_data': same as 'data' but without the landfraction masking
-    '''
-    nc_file = Dataset(filename)
-    variable_object = nc_file.variables[desired_variable_key]
-    if variable_object.dimensions != ('time', 'lat', 'lon'):
-        raise ValueError("Variable {} has dimensions {}; expecting dimensions ('time', 'lat', 'lon')".format(
-            desired_variable_key, variable_object.dimensions))
-    time_object = nc_file.variables['time']
-    latitude_object = nc_file.variables['lat']
-    longitude_object = nc_file.variables['lon']
-
-    # time subset: define winter as Dec-Jan-Feb
-    min_time = cftime.date2num(cftime.datetime(
-        7 + winter_idx, 12, 1), time_object.units, calendar=time_object.calendar)
-    if testing:
-        max_time = cftime.date2num(cftime.datetime(
-            7 + winter_idx, 12, 7), time_object.units, calendar=time_object.calendar)
-    else:
-        max_time = cftime.date2num(cftime.datetime(
-            8 + winter_idx, 2, 28), time_object.units, calendar=time_object.calendar)
-
-    # index slices for time, lat, and lon
-    time_subset = slice_dim(nc_file, 'time', min_time, max_time)
-    lat_subset = slice_dim(nc_file, 'lat', lat_bounds[0], lat_bounds[1])
-    lon_subset = slice_dim(nc_file, 'lon', lon_bounds[0], lon_bounds[1])
-
-    # subset data by time, lat, and lon
-    datetime_min = cftime.num2date(
-        min_time, time_object.units, calendar=time_object.calendar)
-    datetime_max = cftime.num2date(
-        max_time, time_object.units, calendar=time_object.calendar)
-    print('Taking a subset in time and location of variable {}:'.format(
-        desired_variable_key))
-    print('    time: {:04d}-{:02d}-{:02d} to {:04d}-{:02d}-{:02d}'.format(datetime_min.year,
-          datetime_min.month, datetime_min.day, datetime_max.year, datetime_max.month, datetime_max.day))
-    print('    latitude: {:+.1f} to {:+.1f}'.format(lat_bounds[0], lat_bounds[1]))
-    print(
-        '    longitude: {:+.1f} to {:+.1f}'.format(lon_bounds[0], lon_bounds[1]))
-    variable_subset = variable_object[time_subset, lat_subset, lon_subset].data
-
-    # mask by landfraction
-    # replace any value in variable_subset where landfraction < landfrac_min
-    # with np.nan
-    print('Masking {} by landfraction: np.nan anywhere landfraction < {:.2f}'.format(
-        desired_variable_key, landfrac_min))
-    landfrac_subset = nc_file.variables['LANDFRAC'][
-        time_subset, lat_subset, lon_subset].data
-    masked_variable = np.where(
-        landfrac_subset >= landfrac_min, variable_subset, np.nan)
-    subset_dict = {'data': masked_variable, 'time': time_object[time_subset].data, 'lat': latitude_object[
-        lat_subset].data, 'lon': longitude_object[lon_subset].data}
-    if testing:
-        subset_dict['unmasked_data'] = variable_subset
-    return subset_dict
-
-
-def slice_dim(file, dimension_key, low_bound, upper_bound=np.inf, allow_reset=False):
-    '''
-    Given closed bounds [low_bound, upper_bound], return a slice object of the
-    given dimension that spans the range low_bound <= dimension <= upper_bound.
-
-    For example, if dim is the array of values in the dimension, then dim[slice]
-    will return those values of dim in the closed interval
-    [low_bound, upper_bound]. If var is a variable with the corresponding
-    dimension, var[dimension], then var[slice] will return the values of var at
-    locations where dim is in the closed interval [low_bound, upper_bound].
-
-    If allow_reset is False, raises an error if any of the non-infinite bounds
-    are outside the range of the dimension.
-
-    Parameters
-    ----------
-    file: instance of netCDF4 Dataset
-        netCDF file containing the dimension to be sliced
-    dimension_key: string
-        name of dimension to be sliced
-    low_bound: float or -np.inf
-        lower bound of closed dimension slice
-        if -np.inf, lower bound will be the lowest value in the dimension
-    upper_bound: float or np.inf
-        upper bound of closed dimension slice
-        if np.inf, upper bound will be the highest value in the dimension
-    allow_reset: boolean
-        if True and lower [upper] bound is out of range, then replace lower
-        [upper] bound with minimum [maximum] value of dimension instead
-        if False and lower or upper bound is out of range (but not infinity),
-        raise an error
-        Default is False.
-
-    Returns
-    -------
-    slice object spanning the closed interval [low_bound, upper_bound] of the
-    dimension
-    '''
-    if not isinstance(file, Dataset):
-        raise TypeError(
-            'File argument must be an instance of the netCDF4 Dataset class; given type {}'.format(type(file)))
-    else:
-        dimension = file.variables[dimension_key][:].data
-
-    # dimension is monotonically increasing:
-    # True if dimension is monotonically increasing
-    increasing = np.all(np.diff(dimension) > 0)
-    if not increasing:
-        raise ValueError(
-            "NetCDF dimension '{}' must be monotonically increasing to produce valid index slices.".format(dimension_key))
-
-    # low_bound < upper_bound:
-    if not (low_bound < upper_bound):
-        raise ValueError("Dimension slicing by index error for dimension {}:\n   lower bound on index slice ({:.4f}) must be less than upper bound ({:.4f})".format(
-            dimension_key, low_bound, upper_bound))
-
-    # bounds are within the dimension range for non-infinite bounds:
-    if not np.isinf(low_bound) and not ((low_bound >= dimension[0]) and (low_bound <= dimension[-1])):
-        if allow_reset:
-            print("WARNING: Lower bound {:.2f} is out of range of dimension '{}'. Re-setting lower bound to minimum value of dimension, {:.2f}".format(
-                low_bound, dimension_key, dimension[0]))
-            low_bound = dimension[0]
-        else:
-            raise ValueError("Dimension slicing by index error for dimension {}:\n   lower bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(
-                dimension_key, low_bound, dimension[0], dimension[-1]))
-    if not np.isinf(upper_bound) and not ((upper_bound >= dimension[0]) and (upper_bound <= dimension[-1])):
-        if allow_reset:
-            print("WARNING: Upper bound {:.2f} is out of range of dimension '{}'. Re-setting upper bound to maximum value of dimension, {:.2f}".format(
-                low_bound, dimension_key, dimension[-1]))
-            upper_bound = dimension[-1]
-        else:
-            raise ValueError("Dimension slicing by index error for dimension {}:\n   upper bound on index slice ({:.2f}) should be within the range of the dimension, from {:.4f} to {:.4f} ".format(
-                dimension_key, upper_bound, dimension[0], dimension[-1]))
-
-    slice_idx_list = np.squeeze(np.where(np.logical_and(
-        dimension >= low_bound, dimension <= upper_bound)))
-    return slice(slice_idx_list[0], slice_idx_list[-1] + 1)
 
 
 def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj_dir, data_dir):
