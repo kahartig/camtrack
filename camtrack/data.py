@@ -28,6 +28,9 @@ import calendar
 import Ngl
 import scipy.interpolate as interpolate
 
+# camtrack imports
+import camtrack.assist as assist
+
 
 class TrajectoryFile:
     '''
@@ -554,6 +557,9 @@ class WinterCAM:
         lat_slice = variable_da.lat
         lon_slice = variable_da.lon
 
+        # Determine whether input variable duplicated lon=0 as lon=360
+        roll_lon = max(lon_slice) > max(self.variable('lon').values)
+
         # Extract hybrid level information from CAM files
         p_0_mb = self.variable('P0').values.item()/100 # p0 must be in mb
         hyam = self.variable('hyam').values
@@ -574,7 +580,12 @@ class WinterCAM:
             interp_flag = 3
         else:
             raise ValueError('Invalid interpolation method {}. Interpolation must be linear, log, or log-log'.format(interpolation))
-        p_surf = self.variable('PS').sel(time=time_slice, lat=lat_slice, lon=lon_slice).values
+        if roll_lon:
+            reduced_p_surf = self.variable('PS').sel(time=time_slice)
+            rolled_p_surf = assist.roll_longitude(reduced_p_surf)
+            p_surf = rolled_p_surf.sel(lat=lat_slice, lon=lon_slice).values
+        else:
+            p_surf = self.variable('PS').sel(time=time_slice, lat=lat_slice, lon=lon_slice).values
         
         # Interpolate onto pressure levels
         replacement_threshold = 1e29
@@ -593,7 +604,12 @@ class WinterCAM:
             hyam = np.append(self.variable('hyam').values, hyam_surf)
             hybm = np.append(self.variable('hybm').values, hybm_surf)
             # Add singleton 'lev' dimension to TREFHT (surface temperature)
-            T_surf = self.variable('TREFHT').sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+            if roll_lon:
+                reduced_T_surf = self.variable('TREFHT').sel(time=time_slice)
+                rolled_T_surf = assist.roll_longitude(reduced_T_surf)
+                T_surf = rolled_T_surf.sel(lat=lat_slice, lon=lon_slice)
+            else:
+                T_surf = self.variable('TREFHT').sel(time=time_slice, lat=lat_slice, lon=lon_slice)
             T_surf_newcoord = T_surf.assign_coords(lev=1000*(hyam_surf + hybm_surf))
             T_surf_expanded = T_surf_newcoord.expand_dims('lev')
             # Concatenate TREFHT onto T

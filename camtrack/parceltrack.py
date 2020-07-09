@@ -31,6 +31,9 @@ import Ngl
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
+# camtrack imports
+import camtrack.assist as assist
+
 
 class ClimateAlongTrajectory:
     '''
@@ -149,9 +152,7 @@ class ClimateAlongTrajectory:
 
         # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
         if any(self.traj_lon.values > max(raw_data['lon'].values)):
-            lon_0 = raw_data.sel(lon=0.)
-            lon_360 = lon_0.assign_coords(lon=360.)
-            variable_data = xr.concat([raw_data, lon_360], dim='lon')
+            variable_data = assist.roll_longitude(raw_data)
         else:
             variable_data = raw_data
 
