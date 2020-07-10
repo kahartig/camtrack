@@ -4,15 +4,7 @@ Author: Kara Hartig
 Extract climate variables from CAM along trajectories from HYSPLIT
 
 Classes:
-    ClimateAlongTrajectory: store CAM variables at times and locations
-        corresponding to trajectory paths
-
-NOTES on line_plots:
-    time axis is numerical days; could add option to set to some other
-        trajectory column instead, like datetime string
-    QUESTION: how should I dynamically set fig height based on number of plots?
-    QUESTION: how/where should I check that variables_to_plot are valid names? new attribute for list of stored variable names?
-    QUESTION: add option to give list of variables to plot? one per plot
+    ClimateAlongTrajectory: store CAM variables interpolated along trajectory paths
 
 """
 
@@ -39,31 +31,46 @@ class ClimateAlongTrajectory:
     '''
     Store climate variables along given air parcel trajectory
 
-    NOTE: uses nearest-neighbor lat and lon points from CAM file; no
-    interpolation yet
-
     Methods
     -------
-    trajectory_plot
-        plot map of trajectory path in North Polar Stereo
-    line_plots
-        line plots of selected 2-D variables along trajectory
-    contour_plots
-        contour plots of selected 3-D variables along trajectory
+    add_variable
+        interpolate a new variable along trajectory path and add to self.data
+    setup_pinterp
+        one-time set up of interpolation onto pressure levels
 
     Attributes
     ----------
+    winter_file: WinterCAM instance
+        CAM file(s) used in init
+    traj_file: TrajectoryFile instance
+        trajectorie file used in init
+    traj_interpolation: string
+        method of interpolation onto trajectory path
+    traj_number: int
+        number corresponding to trajectory stored
+    traj_time: xarray.DataArray
+        trajectory times every 3 hours, indexed by dimension 'time'
+    traj_lat: xarray.DataArray
+        trajectory latitudes every 3 hours, indexed by dimension 'time'
+    traj_lon: xarray.DataArray
+        trajectory longitudes every 3 hours, indexed by dimension 'time'
+    subset_time: slice
+        slice used to subset variables onto range of trajectory times
+    subset_lat: slice
+        slice used to subset variables onto range of trajectory latitudes
+    subset_lon: slice
+        slice used to subset variables onto range of trajectory longitudes
     direction: string
         direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
-    trajectory: pandas DataFrame
-        3-hourly points along the trajectory, indexed by trajectory age; output
-        frequency matches that of CAM file
+    trajectory: pandas.DataFrame
+        3-hourly points along the trajectory, indexed by trajectory age
+        output frequency matches that of CAM file
     data: xarray Dataset
         values of 2-D and 3-D variables along the trajectory. Dimensions are
-        'time' and possibly 'lev' (if there are any 3-D variables). 2-D
-        variables have 'time' dimension and 3-D have 'time' and 'lev'. Lat and
+        'time' and possibly 'pres' (if there are any 3-D variables). 2-D
+        variables have 'time' dimension and 3-D have 'time' and 'pres'. Lat and
         lon are included as coordinate arrays with dimension 'time' and reflect
-        trajectory path or nearest-neighbor equivalent using CAM coordinates
+        trajectory path, or nearest-neighbor equivalent on CAM coordinates
     '''
 
     def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, pressure_levels=None):
@@ -144,9 +151,40 @@ class ClimateAlongTrajectory:
 
     def add_variable(self, variable, to_1D=False, pressure_levels=None):
         '''
-        DOC
+        Interpolate a new variable onto trajectory path
 
-        if variable is 3-D+time and to_1D is True, will also interp onto trajectory pressure to collapse vertical dimension
+        The new variable is automatically added to self.data
+        If the variable is 3-D + time (time, lev, lat, lon), there are two
+        interpolation options:
+            if to_1D=False, retrieve full air column along trajectory path
+                output dimensions are (time, pres)
+            if to_1D=True, also interpolate onto the trajectory pressure
+                output dimensions are (time)
+
+        Parameters
+        ----------
+        variable: string
+            name of variable to be interpolated onto trajectory path
+        to_1D: boolean
+            determines whether a 3-D+time variable is interpolated onto
+            trajectory height/pressure as well as latitude and longitude
+            If True and variable has dimensions (time, lev, lat, lon):
+                retrieve full air column along trajectory path
+                output dimensions are (time, pres)
+            If False:
+                interpolate onto pressure as well as the usual time, lat, lon of
+                trajectory path
+                output dimensions are (time)
+            Default is False
+        pressure_levels: array-like
+            pressure levels, in Pa, to interpolate onto, if a 3-D+time variable
+            is requested
+            Set to None if variable is 2-D+time
+            Only required if no 3-D+time variables and pressure levels were
+            provided on init
+            If pressure levels were provided on init, those values will be used
+            instead
+            Default is None
         '''
         raw_data = self.winter_file.variable(variable).sel(time=self.subset_time)
 
@@ -203,7 +241,15 @@ class ClimateAlongTrajectory:
 
     def setup_pinterp(self, pressure_levels):
         '''
-        DOC
+        One-time setup of interpolation onto pressure levels
+
+        If 3-D+time variables were not requested on init, this function will be
+        called by add_variable the first time a 3-D+time variable is added
+
+        Parameters
+        ----------
+        pressure_levels: array-like
+            pressure levels, in Pa, to interpolate onto
         '''
         if pressure_levels is not None:
             self.pressure_levels = pressure_levels

@@ -6,15 +6,18 @@ Handle data from HYSPLIT trajectories and CAM model output
 Classes:
     TrajectoryFile:  read in and store data from HYSPLIT .traj file
     WinterCAM:  read in and store data from CAM4 winter (Nov-Feb) file
+    
 Functions:
+    subset_and_mask:  subset a WinterCAM variable by time, lat, lon and mask by landfraction
     make_CONTROL:  print a CONTROL file for running HYSPLIT trajectories
     winter_string:  return years corresponding to the winter in which a given time falls
 
 ASSUMPTIONS:
     CAM time units are days since 0001-01-01 00:00:00 and calendar is 'noleap'
-    all trajectories cover same time window; none terminate early
-    available CAM variables are the same as those listed by Zeyuan (see WinterCAM.name_to_h)
-    CONTROL file input data is stored in directory structure winter_YY-YY/pi_3h_YYYY.arl
+    CONTROL file input data is stored in files named 'pi_3h_YYYY.arl' where e.g.
+        YYYY=0910 for the 0009-0010 winter
+    WinterCAM file names are in the format 'pi_3h_YYYY_h?.nc' where e.g.
+        YYYY=0910 for the 0009-0010 winter
 """
 
 # Standard imports
@@ -40,6 +43,14 @@ class TrajectoryFile:
 
     Methods
     -------
+    get_trajectory
+        return DataFrame of trajectory data for a specified trajectory number
+        time interval (e.g. every 3 hours)
+    col2da
+        convert any data column into an xarray DataArray
+    height2pressure
+        convert height column to pressure, based on the calculation performed by
+        HYSPLIT in prfecm.f
     winter
         return year(s) corresponding to this trajectory in user-specified format
 
@@ -49,7 +60,7 @@ class TrajectoryFile:
         contains all grids used: model, year, month, day, hour, and fhour
     traj_start: pandas DataFrame
         contains initialization information for all trajectories: date, time,
-        and location at which trajectory was started
+        location, and height at which trajectory was started
     diag_var_names: list
         list of names of diagnostic output variables. Corresponding values along
         trajectories are in the trailing columns of the .traj file
@@ -57,12 +68,17 @@ class TrajectoryFile:
         number of distinct trajectories stored in .traj file
     direction: string
         direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
+    hit_ground: dict
+        trajectory number:boolean pairs indicating whether that trajectory
+        contained any NaN values
+            NOTE that hitting the ground does not always produce NaN values, so
+            hit_ground is a very conservative measure
     data: pandas DataFrame
         trajectory data every 3 hours
         uses a MultiIndex:
             top level: int from 1 to ntraj
                 trajectory number 'traj #'
-            second level: float from 0.0 to -(total length of trajectory)
+            second level: int from 0 to -(total length of trajectory)
                 age of trajectory 'traj age'
             EX: to access trajectory 3 at time -5 hours, use data.loc[3, -5]
         columns: grid #, year, month, day, hour, minute, fhour, lat, lon,
@@ -74,10 +90,6 @@ class TrajectoryFile:
             ordinal time: float; days since 0001-01-01 00:00:00
     data_1h: pandas DataFrame
         same as data, but every hour
-    data_12h: pandas DataFrame
-        same as data, but every 12 hours
-    data_24h: pandas DataFrame
-        same as data, but every 24 hours
     '''
 
     def __init__(self, filepath):
@@ -230,7 +242,27 @@ class TrajectoryFile:
 
     def get_trajectory(self, trajectory_number, hourly_interval=None, age_interval=None):
         '''
-        Return data from every hourly_interval hours or age_interval age for a single trajectory using integer trajectory number
+        Return data from every hourly_interval hours or age_interval age for a
+        single trajectory
+
+        Must choose between hourly_interval and age_interval, as they are
+        mutually exclusive methods for selecting trajectory data
+
+        Parameters
+        ----------
+        trajectory_number: int
+            which trajectory to retrieve
+        hourly_interval: int or float
+            retrieve trajectory values every hourly_interval hours, based on
+            'hour' data column
+        age_interval: int or float
+            retrieve trajectory values every age_interval hours, based on
+            'traj age' index
+
+        Returns
+        -------
+        pandas DataFrame of trajectory data every X hours, where X is set by
+        either hourly_interval or age_interval
         '''
         single_trajectory = self.data_1h.loc[trajectory_number]
 
@@ -257,7 +289,7 @@ class TrajectoryFile:
 
         Parameters
         ----------
-        trajectory_number: integer
+        trajectory_number: int
             number corresponding to specific trajectory of interest
             Trajectory data is retrieved with self.data.loc[trajectory_number]
         data_column: string
@@ -266,6 +298,13 @@ class TrajectoryFile:
             keys for other columns to be included as additional coordinates in
             the DataArray produced
             Default is None: no additional coordinates
+
+        Returns
+        -------
+        column_da: xarray.DataArray
+            trajectory data as a DataArray. The indexing dimension is the
+            highest-order index in TrajectoryFile.data, and additional
+            coordinates can be added with include_coords
         '''
         trajectory = self.data.loc[trajectory_number]
         column_da = xr.DataArray.from_series(trajectory[data_column])
@@ -289,12 +328,29 @@ class TrajectoryFile:
 
     def height2pressure(self, cam_dir, trajectory_number, height_key='height (m)'):
         '''
-        Return 3-hourly trajectory with new column 'pressure' of pressure levels along trajectory path
-        DOC
+        Return 3-hourly trajectory with new column 'pressure' of pressure levels
+        along trajectory path
 
+        Based on the calculation performed by HYSPLIT in prfecm.f
         NOTE this function is not exact; it should depend on which variables
         were provided to HYSPLIT when calculating trajectory, model height, etc.
 
+        Parameters
+        ----------
+        cam_dir: string or path-like
+            path to netCDF files containing climate variables used to calculate
+            this trajectory in HYSPLIT
+                required variables: 'PS', 'T', 'Q'
+        trajectory_number: int
+            number corresponding to specific trajectory of interest
+        height_key: string
+            name of column containing trajectory heights in meters
+
+        Returns
+        -------
+        trajectory: pandas.DataFrame
+            a copy of the requested trajectory data every 3 hours, but with new
+            column 'pressure' of corresponding pressure level in Pa
         '''
         winter_file = WinterCAM(cam_dir, self)
         trajectory = self.get_trajectory(trajectory_number, 3)
@@ -362,7 +418,7 @@ class TrajectoryFile:
 
     def winter(self, out_format):
         '''
-        Return year(s) corresponding to the winter in which these trajectories occurred
+        Return year(s) corresponding to the winter in which the trajectories occurred
 
         Parameters
         ----------
@@ -403,35 +459,29 @@ class WinterCAM:
 
     Methods
     -------
-    (None)
+    variable
+        retrieve a variable by name from WinterCAM.dataset
+    interpolate
+        interpolate the given DataArray onto pressure levels
 
     Attributes
     ----------
-    name_to_h (class attribute): dictionary
-        maps CAM variable name string to corresponding file, denoted by string
-        'h1', 'h2', 'h3', or 'h4'
-    h_to_d: dictionary
-        maps 'h1' through 'h4' to xarray Dataset containing the corresponding
-        CAM data
-    lat: numpy array of latitude coordinates
-    lon: numpy array of longitude coordinates
-
+    directory: string
+        if a TrajectoryFile instance or winter is given during init:
+            path to directory containing CAM files
+        else:
+            full path to a netCDF file
+    time_units: string
+        units for CAM file time dimension (ordinal days)
+        'days since 0001-01-01 00:00:00'
+    time_calendar: string
+        calendar type for CAM file time dimension
+        retrieved directly from dataset
+    dataset: xarray.Dataset
+        contains all variables from CAM file(s) indicated in init
+        if trajectories or winter is not None, merges h1, h2, h3, and h4 files
+        into a single dataset
     '''
-
-    # Map CAM variable names to h1 through h4 files
-    # name_to_h = dict.fromkeys(['CLDHGH', 'CLDICE', 'CLDLIQ', 'CLDLOW', 'CLDMED',
-    #                            'CLDTOT', 'CLOUD', 'CONCLD', 'FICE', 'ICIMR', 'ICLDIWP', 'ICLDTWP', 'ICWMR',
-    #                            'Q', 'QFLX', 'QREFHT', 'RELHUM', 'SFCLDICE', 'SFCLDLIQ', 'TGCLDCWP',
-    #                            'TGCLDIWP', 'TGCLDLWP', 'TMQ'], 'h1')
-    # name_to_h.update(dict.fromkeys(['FLDS', 'FLDSC', 'FLNS', 'FLNSC', 'FLNT',
-    #                                 'FLNTC', 'FLUT', 'FLUTC', 'FSDS', 'FSDSC', 'FSDTOA', 'FSNS', 'FSNSC', 'FSNT',
-    #                                 'FSNTC', 'FSNTOA', 'FSNTOAC', 'FSUTOA', 'LHFLX', 'LWCF', 'QRL', 'QRS', 'SHFLX',
-    #                                 'SOLIN', 'SWCF'], 'h2'))
-    # name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
-    #                                 'PRECL', 'PRECT', 'PS', 'PSL', 'SNOWHICE', 'SNOWHLND', 'TAUX', 'TAUY', 'U',
-    #                                 'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
-    # name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
-    #                                 'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
 
     def __init__(self, file_dir, trajectories=None, winter=None):
         '''
@@ -449,6 +499,7 @@ class WinterCAM:
             if not None, must be a family of trajectories that start at the same
                 place and time. CAM files are loaded that correspond to the
                 year(s) associated with these trajectories
+            mutually exclusive with winter
         winter: string
             indicates which winter to pull h1 through h4 files for
                 e.g. for 0009-0010 winter, winter='0910'
@@ -501,6 +552,9 @@ class WinterCAM:
     def variable(self, key):
         '''
         Return DataArray for the variable named 'key'
+
+        To see the list of all available variable keys, use
+        self.dataset.data_vars
         '''
         return self.dataset[key]
 
@@ -636,12 +690,45 @@ class WinterCAM:
 
 def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_bounds, mask_by='LANDFRAC', mask_threshold=0.9):
     '''
-    Return variable after subsetting by time, latitude, and longitude and masking by another variable.
+    Return variable after subsetting by time, latitude, and longitude and
+    masking by another variable.
 
-    When masking, values from variable_key are replaced by np.nan wherever the mask_by variable is less than the mask_threshold
+    When masking, values from variable_key are replaced by np.nan wherever the
+    mask_by variable is less than the mask_threshold
 
-    DOC
+    Parameters
+    ----------
+    winter_file: WinterCAM instance
+        the CAM data file from which variable_key and mask_by will be pulled
+    variable_key: strinng
+        name of variable to subset and mask
+    time_bounds: list-like
+        (minimum, maximum) times to subset to
+        the bounds are inclusive
+        for compatibility with xarray.DataArray.sel, must be in one of the
+        following formats:
+            'YYYY-MM-DD' (will default to HH:MM:SS = '00:00:00')
+            cftime.DatetimeNoLeap()
+    lat_bounds: list-like
+        (minimum, maximum) latitudes to subset to
+        the bounds are inclusive
+    lon_bounds: list-like
+        (minimum, maximum) longitudes to subset to
+        the bounds are inclusive
+    mask_by: string
+        name of variable to mask variable_key by
+        Default is 'LANDFRAC'
+            landfrac = 1.0 is fully land-covered
+            landfrac = 0.0 is fully ocean-covered
+    mask_threshold: float
+        wherever the mask_by variable values are less than mask_threshold,
+        replace values in variable_key by np.nan
 
+    Returns
+    -------
+    masked_variable: xarray.DataArray
+        variable_key from winter_file, subset onto a region defined by time,
+        latitude, and longitude bounds and masked by the variable mask_by
     '''
     time_slice = slice(time_bounds[0], time_bounds[1])
     lat_slice = slice(lat_bounds[0], lat_bounds[1])
@@ -664,21 +751,23 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
 
     CONTROL files will be named CONTROL_<event_ID>
     trajectory files will be named traj_event<event_ID>.traj
+    Assumes that input data files are named 'pi_3h_YYYY.arl' where e.g.
+        YYYY=0910 for the 0009-0010 winter
 
     Parameters
     ----------
-    event: Pandas DataSeries
+    event: pandas.DataSeries
         contains time and lat/lon information for trajectory initialization.
         Entries must include:
             'time': time of event in days since 0001-01-01 on 'noleap' calendar
             'lat': latitude of event in degrees on -90 to 90 scale
             'lon': longitude of event in degrees on 0 to 360 scale
-    event_ID: integer
+    event_ID: int
         unique identifier for the event, used to make CONTROL file name:
         CONTROL_<event ID>
     traj_heights: array-like
         starting heights in meters for each trajectory
-    backtrack_time: integer
+    backtrack_time: int
         number of hours to follow each trajectory back in time
     output_dir: string
         output directory for CONTROL files

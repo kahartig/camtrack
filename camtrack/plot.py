@@ -1,16 +1,18 @@
 """
 Author: Kara Hartig
 
-Plot trajectory paths or climate variables by event or height
+Plot trajectory paths or climate variables along paths by event or height
 
 Functions:
-    trajectory_path_plots: for each event, plot all trajectory paths in North Polar Stereo, colored by initial height
-    line_plots_by_event: for each event, plot 2-D climate variables sampled along trajectory paths at all heights
-    line_plots_by_trajectory: for each initial trajectory height, plot 2-D climate variables sampled along trajectory path for all events
+    trajectory_path_plots:  for each event, plot all trajectory paths in North Polar Stereo, colored by initial height
+    trajectory_path_with_wind:  for each event, plot a single trajectory path overlaid with instantaneous wind vectors
+    trajectory_endpoints_plot:  plot end points of all trajectories provided
+    line_plots_by_event:  for each event, plot 2-D climate variables sampled along trajectory paths at all heights
+    line_plots_by_trajectory:  for each initial trajectory height, plot 2-D climate variables sampled along trajectory path for all events
     contour_plots:  for each event, plot contours of 3-D climate variables interpolated onto the path of a given trajectory
-    generate_trajlist: generate a list of paths to trajectory files
-    generate_traj2save: generate a dictionary mapping between trajectory file paths and save file paths
-    generate_tnum2save: generates a dictionary mapping between integer trajectory numbers and save file paths
+    generate_trajlist:  generate a list of paths to trajectory files
+    generate_traj2save:  generate a dictionary mapping between trajectory file paths and save file paths
+    generate_tnum2save:  generates a dictionary mapping between integer trajectory numbers and save file paths
 """
 # Standard imports
 import numpy as np
@@ -31,8 +33,15 @@ import camtrack as ct
 
 def trajectory_path_plots(trajectory_paths):
     '''
-    For each event index from 0 to num_events-1, save North Polar Stereo plot of
-    all trajectories in the corresponding trajectory file
+    For each file in trajectory_paths, save North Polar Stereo plot of all
+    trajectories in the corresponding trajectory file
+
+    To print plots to screen, use a list for trajectory_paths.
+    To save plots, use a dictionary for trajectory_paths.
+    Included features: 
+        blue X at end/initialization point (traj age=0)
+        grey circle at start point
+        blue hash marks along paths every 24 hours
     
     Parameters
     ----------
@@ -132,11 +141,29 @@ def trajectory_path_plots(trajectory_paths):
 
 def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None):
     '''
-    For the given trajectory paths and trajectory number, generate a plot of the
+    For the given trajectory paths and trajectory number, generate plots of the
     trajectory path overlaid by instantaneous horizontal wind vectors and,
     optionally, colored by parcel height
 
-    color = None (single color by initial height) or 'HEIGHT'
+    Parameters
+    ----------
+    trajectory_paths: list or dictionary
+        if list:
+            list of paths to all .traj files to be plot
+            all plots will be printed to the screen
+        if dict:
+            mapping between paths to .traj files and paths to save files
+            all plots will be saved at designated save file locations
+    traj_number: int
+        number corresponding to trajectory of interest
+    cam_dir: path-like
+        path to directory containing netCDF file(s) with wind data
+    color: string or None
+        if None:
+            trajectory path will be a solid color
+        if 'HEIGHT':
+            trajectory path will be colored by instantaneous air parcel height
+        Default is None
     '''
     # Parse input argument
     if isinstance(trajectory_paths, dict):
@@ -240,7 +267,13 @@ def trajectory_endpoints_plot(trajectory_list, save_file_path=None):
     '''
     Plot endpoints of all trajectories in trajectory_list
 
-    save_file_path is None (print to screen) or path
+    Parameters
+    ----------
+    trajectory_list: list of path-like
+        list of paths to trajectory files
+    save_file_path: path-like
+        if None, print plot to screen
+        if path-like, save plot to this path
     '''
     # Initialize plot
     plt.rcParams.update({'font.size': 14})  # set overall font size
@@ -269,45 +302,47 @@ def trajectory_endpoints_plot(trajectory_list, save_file_path=None):
 
 def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
     '''
-    For each event index from 0 to num_events-1, generate line plots of climate
+    For each file in trajectory_paths, generate line plots of climate
     variables along all trajectories
 
+    To print plots to screen, use a list for trajectory_paths.
+    To save plots, use a dictionary for trajectory_paths.
     Saves 1 .png figure per event. Each figure is a column of subplots, each
-    subplot corresponding to a different variable in cam_variables,
-    traj_variables, and custom_variables. Lines on each plot are colored by
-    initial trajectory height.
+    subplot corresponding to a different variable in cam_variables and
+    custom_variables. Lines on each plot are colored by initial trajectory
+    height.
 
     Parameters
     ----------
-    num_events: integer
-        number of events to generate line plots for
-        assuming each .traj file is named 'traj_event<event idx>.traj':
-            event index of 2 -> 'traj_event02.traj'
-    num_traj: integer
-        number of trajectories per .traj file
+    trajectory_paths: list or dictionary
+        if list:
+            list of paths to all .traj files to be plot
+            all plots will be printed to the screen
+        if dict:
+            mapping between paths to .traj files and paths to save files
+            all plots will be saved at designated save file locations
     cam_variables: list-like of strings
         list of CAM variables to plot
         must correpond to 2-D variables with dimensions (time, lat, lon)
-    traj_variables: list-like of strings
-        list of variables to plot from trajectory file
-        'HEIGHT' is always available; other diagnostic output variables are only
-        available if corresponding SETUP.CFG variable in HYSPLIT is set to 1
-        when trajectories were generated
-    custom_variables: list-like of strings
-        list of variables to plot with hard-coded special plotting instructions
-        currently supported: 'Net cloud forcing'
+    other_variables: list-like of strings
+        list of non-CAM variables to plot
+        includes custom variables and HYSPLIT diagnostic output variables
+        supported custom variables:
+            'Net cloud forcing'
+        HYSPLIT diagnostic output variables:
+            'HEIGHT' is always available
+            other diagnostic output variables are only available if
+            corresponding SETUP.CFG variable in HYSPLIT was set to 1 when
+            trajectories were generated
     traj_interp_method: 'nearest' or 'linear'
         interpolation method for matching trajectory lat-lon to CAM variables
-    traj_dir: path-like or string
-        path to directory where trajectory files are stored
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
-    save_dir: path-like or string
-        path to directory where trajectory plots will be saved
-        output file name format is 'traj_plot_event<event idx>.png'
     pressure_levels: array-like of floats
-        pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
-        Only used if requesting 3-D variables interpolated directly onto trajectory path
+        pressure levels, in Pa, to interpolate onto for variables with a
+        vertical level coordinate
+        Only used if requesting 3-D variables interpolated directly onto
+        trajectory path
         Default is None
     '''
     # Parse input argument
@@ -385,12 +420,14 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
 
 def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
     '''
-    For each trajectory number from 1 to num_traj, generate line plots of
-    climate variables across all events.
+    For each trajectory number in traj_numbers, generate line plots of
+    climate variables across all events in trajectory_list.
 
+    To print plots to screen, use a list for traj_numbers.
+    To save plots, use a dictionary for traj_numbers.
     Saves 1 .png figure per trajectory number. Each figure is a column of
     subplots, each subplot corresponding to a different variable in
-    cam_variables, traj_variables, and custom_variables. Thin lines are from
+    cam_variables and other_variables. Thin lines are from
     individual trajectories, thick lines are averages across all events.
 
     Parameters
@@ -420,8 +457,10 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
     pressure_levels: array-like of floats
-        pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
-        Only used if requesting 3-D variables interpolated directly onto trajectory path
+        pressure levels, in Pa, to interpolate onto for variables with a
+        vertical level coordinate
+        Only used if requesting 3-D variables interpolated directly onto
+        trajectory path
         Default is None
     '''
     # Parse input arguments
@@ -513,9 +552,11 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
 
 def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels, traj_interp_method, cam_dir):
     '''
-    For each event, generate contour plots in time and pressure of climate
-    variables for a specific trajectory.
+    For each file in trajectory_paths, generate contour plots in time and
+    pressure of climate variables for a specific trajectory.
 
+    To print plots to screen, use a list for trajectory_paths.
+    To save plots, use a dictionary for trajectory_paths.
     Saves 1 .png figure per event. Each figure is a column of subplots, each
     subplot corresponding to a different variable in cam_variables along the
     trajectory specified by traj_number.
@@ -529,7 +570,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         to save to file:
             dict mapping between paths to .traj files and paths to save files
             all plots will be saved at designated save file locations
-    traj_number: integer
+    traj_number: int
         specifies which trajectory to plot from each event
     cam_variables: list-like of strings
         list of CAM variables to plot
@@ -598,9 +639,10 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
 
 def generate_trajlist(num_events, traj_dir):
     '''
-    Generate a list of paths to trajectory files numbered 0 to num_events-1
+    Generate a list of paths to trajectory files in traj_dir
 
-    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from 00 to num_events-1
+    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from
+    00 to num_events-1
     '''
     trajectory_list = []
     for event_ID in range(num_events):
@@ -609,10 +651,13 @@ def generate_trajlist(num_events, traj_dir):
 
 def generate_traj2save(num_events, traj_dir, save_dir, save_prefix):
     '''
-    Generate a dictionary mapping between trajectory file paths and save file paths
+    Generate a dictionary mapping between trajectory file paths and save file
+    paths
 
-    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from 00 to num_events-1
-    Assumes save file name format save_prefix + '_eventXX.png' where XX runs from 00 to num_events-1
+    Assumes trajectory file name format 'traj_eventXX.traj' where XX runs from
+    00 to num_events-1
+    Assumes save file name format save_prefix + '_eventXX.png' where XX runs
+    from 00 to num_events-1
     '''
     traj2save_dict = {}
     for event_ID in range(num_events):
@@ -623,10 +668,12 @@ def generate_traj2save(num_events, traj_dir, save_dir, save_prefix):
 
 def generate_tnum2save(num_traj, save_dir, save_prefix):
     '''
-    Generate a dictionary mapping between integer trajectory numbers and save file paths
+    Generate a dictionary mapping between integer trajectory numbers and save
+    file paths
 
     Trajectory numbers run from 1 to num_traj
-    Assumes save file name format save_prefix + '_trajXX.png' where XX runs from 01 to num_traj
+    Assumes save file name format save_prefix + '_trajXX.png' where XX runs from
+    01 to num_traj
     '''
     tnum2save_dict = {}
     for traj_number in range(1, num_traj + 1):

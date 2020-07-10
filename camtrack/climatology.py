@@ -5,8 +5,8 @@ Find distinct cold events by comparing 3-hourly temperatures to winter climatolo
 
 Functions:
     anomaly_DJF:  produce an array of temperature anomalies from climatological average
-    find_coldest:  sort anomaly temperature array and identify X coldest distinct events
-    OLD_find_coldest:  an earlier version of find_coldest; probably redundant?
+    sample_coldtail:  randomly sample events from specified percentile range of an array of temperature anomalies
+    find_coldest:  identify X coldest distinct events from an array of temperature anomalies
 """
 
 # Standard Imports
@@ -30,19 +30,19 @@ def anomaly_DJF(data_list, method):
     ----------
     data_dict_list: list of DataArrays
         each element in the list is a DataArray containing one winter (DJF) of
-        [time, lat, lon] data
+        (time, lat, lon) data
     method: string
         must be either 'absolute' or 'scaled'
-        if 'absolute', output is just data - DJF mean
+        if 'absolute', output is data - DJF mean
         if 'scaled', output is (data - DJF mean)/stdev
 
     Returns
     -------
     diff_dict: dictionary
-        'diff': a [time, lat, lon] DataArray of anomalies from the DJF mean,
+        'diff': a (time, lat, lon) DataArray of anomalies from the DJF mean,
             calculated according to 'method' argument. Arrays from each year of
             the input have been concatenated along the time axis
-        'mean': a [lat, lon] DataArray of the DJF mean across all years provided
+        'mean': a (lat, lon) DataArray of the DJF mean across all years provided
     """
     data_all_winters = xr.concat(data_list, dim='time')
     mean_all_winters = data_all_winters.mean(dim='time')
@@ -64,9 +64,33 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     Sort data from lowest to highest and randomly sample number_of_events from a
     specified percentile range of the distribution
 
-    percentile_range: list-like of 2 numbers from 0 to 100
-    if seed is not None, will be passed to randint
+    Parameters
+    ----------
+    climatology_dict: dict
+        dictionary such as the output of climatology.anomaly_DJF(), containing
+        'diff', a (time, lat, lon) DataArray of anomalies from a mean which will
+        be arranged from lowest to highest and randomly sampled
+    number_of_events: int
+        number of events to sample from the given percentile range of the
+        anomaly array 
+    percentile_range: list-like
+        (minimum, maximum) of percentile range to sample from
+        each element is a number between 0 and 100
+    seed: int
+        if seed is not None, it is passed to randint
+        Default is None
 
+    Returns
+    -------
+    cold_events: pandas.DataFrame
+        list of events sampled from climatology_dict['diff']
+        contains columns:
+            'time': ordinal time of event
+            'date': date string of event YYYY-MM-DD HH:MM:SS
+            'cftime date': cftime.DatetimeNoLeap() instances
+            'lat': latitude
+            'lon': longitude
+            'temp anomaly': anomaly value of event from climatology_dict['diff']
     """
     def samples2values(samples_idx, sorted_coord_idx, coordinates):
         # sorted_coord_idx = sorted_idx[index of desired coordinate]
