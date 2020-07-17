@@ -105,14 +105,6 @@ class ClimateAlongTrajectory:
                 key for key in variables if key not in winter_file.dataset.data_vars]
             raise ValueError(
                 'One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
-
-        # Check that pressure levels are provided if any 3-D variables are requested
-        has_3d_vars = False # True if there are any 3-D variables requested
-        if any(winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon') for key in variables):
-            has_3d_vars = True
-            list_3d_vars = [key for key in variables if winter_file.variable(key).dims == ('time', 'lev', 'lat', 'lon')]
-            if pressure_levels is None:
-                raise ValueError('One or more requested variables has 3 spatial dimensions ({}), so pressure_levels must be provided for vertical interpolation'.format(list_3d_vars))
     
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
@@ -130,10 +122,6 @@ class ClimateAlongTrajectory:
         self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
         self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
         self.subset_time = slice(min(self.traj_time.values), max(self.traj_time.values))
-
-        # Set up interpolation to pressure levels for 3-D variables:
-        if has_3d_vars:
-            self.setup_pinterp(pressure_levels)
         
         # Store height and diagnostic output variables
         list_of_variables = []
@@ -258,4 +246,4 @@ class ClimateAlongTrajectory:
             self.pres_extrapolate = False  # for Ngl.vinth2p
             self.fill_value = np.nan  # for winter_file.interpolate
         else:
-            raise NameError('pressure_levels has not been defined, please provide an array of pressure values in Pa to interpolate onto')
+            raise NameError('pressure_levels has not been defined, please provide an array of pressure values in Pa to interpolate 3-D variables onto')
