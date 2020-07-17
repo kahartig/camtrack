@@ -17,8 +17,7 @@ import cftime
 import math
 
 # Misc imports
-from numpy.random import seed
-from numpy.random import randint
+from numpy import random
 from operator import itemgetter
 
 
@@ -113,8 +112,8 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     idx_lower = int(math.floor( (percentile_range[0]/100.)*num_notnan ))
     idx_upper = int(math.floor( (percentile_range[1]/100.)*num_notnan ))
     if seed is not None:
-        seed(seed)
-    samples = randint(idx_lower, idx_upper, number_of_events) # samples is a list of indices for the second index of sorted_idx
+        random.seed(seed)
+    samples = random.randint(idx_lower, idx_upper, number_of_events) # samples is a list of indices for the second index of sorted_idx
 
     # Pull coordinate values cooresponding to samples
     sample_times, sample_times_idx = samples2values(samples, sorted_idx[0], times)
