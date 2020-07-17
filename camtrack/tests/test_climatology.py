@@ -7,106 +7,163 @@ Unit tests for climatology.py
 """
 # Standard imports
 import numpy as np
-from netCDF4 import Dataset
+import xarray as xr
+import cftime
 import os
 
 # Testing imports
 from numpy.testing import assert_raises, assert_allclose
 
 # camtrack imports
-from camtrack.climatology import anomaly_DJF, find_coldest, OLD_find_coldest
-from camtrack.data import subset_nc
+from camtrack.climatology import anomaly_DJF, sample_coldtail, find_coldest
 
-# Make simple "data" dictionaries to work as inputs
-SAMPLE_DATA = np.array([ [[2, 0], [0, 2]], [[1, 1], [1, 1]] ])
-TILED_DATA = np.tile(SAMPLE_DATA, (2, 1, 1))  # extended along 'time' axis
-SAMPLE_DICT_1 = {'data': SAMPLE_DATA, 'time': [0, 1], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
-SAMPLE_DICT_2 = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
-BAD_LAT_DICT = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5, 2.0], 'lon': [0.5, 1.5]}
-BAD_LON_DICT = {'data': TILED_DATA, 'time': [5, 6, 7, 8], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5, 2.0]}
 
-# Make simple climatology dictionaries (like output of anomaly_DFJ)
+#####################################
+##    Anomaly from DJF Details     ##
+#####################################
+# Inputs
+ANOMALY_VALUES_1 = np.arange(0, 8).reshape((2, 2, 2)).astype(float)
+ANOMALY_VALUES_1[0, 1, 1] = np.nan
+ANOMALY_VALUES_1[1, 1, 1] = np.nan
+ANOMALY_VALUES_2 = 2*ANOMALY_VALUES_1
+ANOMALY_TIME_1 = [0, 1.5]
+ANOMALY_TIME_2 = [10, 11.5]
+ANOMALY_LAT = [2, 4]
+ANOMALY_LON = [0, 2.5]
+ANOMALY_DATA_1 = xr.DataArray(ANOMALY_VALUES_1, [ ('time', ANOMALY_TIME_1), ('lat', ANOMALY_LAT), ('lon', ANOMALY_LON) ])
+ANOMALY_DATA_2 = xr.DataArray(ANOMALY_VALUES_2, [ ('time', ANOMALY_TIME_2), ('lat', ANOMALY_LAT), ('lon', ANOMALY_LON) ])
+
+# Outputs
+ANOMALY_MEAN = np.array([[3., 4.5], [6., np.nan]])
+ANOMALY_DIFF_ABSOLUTE = np.array([ [[-3., -3.5],[-4., np.nan]], [[1., 0.5],[0., np.nan]], [[-3., -2.5],[-2., np.nan]], [[5., 5.5],[6., np.nan]]])
+ANOMALY_STD = np.std(np.concatenate((ANOMALY_VALUES_1, ANOMALY_VALUES_2), axis=0), axis=0)
+ANOMALY_DIFF_SCALED = ANOMALY_DIFF_ABSOLUTE/ANOMALY_STD
+
+#####################################
+##    Sample Coldtail Details      ##
+#####################################
+# Inputs
+TIME_UNITS = 'days since 0001-01-01 00:00:00'
+TIME_CALENDAR = 'noleap'
+SAMPLE_TIME = cftime.num2date(ANOMALY_TIME_1 + ANOMALY_TIME_2, TIME_UNITS, TIME_CALENDAR)
+SAMPLE_INPUT = {'diff': xr.DataArray(ANOMALY_DIFF_ABSOLUTE, [ ('time', SAMPLE_TIME), ('lat', ANOMALY_LAT), ('lon', ANOMALY_LON) ])}
+TOTAL_EVENTS = np.prod(ANOMALY_DIFF_ABSOLUTE.shape)
+SAMPLE_PERCENTILE_LOW = (0, 25)
+SAMPLE_PERCENTILE_MID = (100./3, 200./3)
+SAMPLE_PERCENTILE_HIGH = (75, 100)
+SAMPLE_PERCENTILE_INBETWEEN = (30, 90) # percentiles that do not divide SAMPLE_INPUT cleanly
+SAMPLE_SEED = 10
+
+# Outputs
+SAMPLE_LOW_VALUES = np.array([-4., -3.5, -3.])
+SAMPLE_MID_VALUES = np.array([-2.5, -2., 0., 0.5])
+SAMPLE_HIGH_VALUES = np.array([5., 5.5, 6.])
+SAMPLE_INBETWEEN_VALUES = np.array([-2.5, -2., 0., 0.5, 1., 5.])
+SAMPLED_VALUES_WITH_SEED = [-3., 0.] # sampling 2 events from SAMPLE_INPUT full range with random seed SAMPLE_SEED
+SAMPLE_SINGLE_EVENT = {'time': 0, 'lat': 2, 'lon': 0, 'temp anomaly': -3.}  # location with value -3. (unraveled index 2) in SAMPLE_INPUT
+
+#####################################
+##      Find Coldest Details       ##
+#####################################
+# Inputs
 SAMPLE_TEMP_ANOMALY = np.array([ [[5, 4], [3, 2]], [[-5, -4], [-3, np.nan]] ])
+
+# Outputs
 COORDS_COLDEST_TEMP_ANOMALY = (1, 0.5, 0.5) # in the order (time, lat, lon)
 SAMPLE_CLIMATOLOGY_DICT = {'diff': SAMPLE_TEMP_ANOMALY, 'time': [0, 1], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
 
-# Sample netCDF file from CAM4
-# time range: 0008-12-01 00:00:00 to 0008-12-07 00:00:00 (YYYY-MM-DD HH:MM:SS)
-# latitude range: 80.52631579 to 90.0
-# longitude range: 320.0 to 330.0 (on 0-360 scale)
-NC_SAMPLE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sample_CAM4_for_nosetests.nc')
-NC_SAMPLE_FILE = Dataset(NC_SAMPLE_PATH)
-WINTER_IDX = 1 # index 1 corresponds to 08-09 winter
-COLDEST_LAND_TEMPERATURE = 236.67903 # using np.nanmin(temperature masked by landfraction)
-THIRD_COLDEST_LAND_TEMPERATURE = 236.76225
-FOURTH_COLDEST_LAND_TEMPERATURE = 236.81648
+
+#####################################
+##      TESTS: anomaly_DJF         ##
+#####################################
 
 # Absolute method: value - mean
 def test_absolute_method():
-    dict_list = [SAMPLE_DICT_1, SAMPLE_DICT_2]
-    expected_diff = np.tile(0.5*np.array([ [[1, -1], [-1, 1]], [[-1, 1], [1, -1]] ]), (3, 1, 1))
-    expected_time = [0, 1, 5, 6, 7, 8]
-    expected_lat = [0.5, 1.5]
-    expected_lon = [0.5, 1.5]
-    diff_dict = anomaly_DJF(dict_list, 'absolute')
-    assert_allclose(diff_dict['diff'], expected_diff)
-    assert_allclose(diff_dict['time'], expected_time)
-    assert_allclose(diff_dict['lat'], expected_lat)
-    assert_allclose(diff_dict['lon'], expected_lon)
+    input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
+    expected_time = ANOMALY_TIME_1 + ANOMALY_TIME_2
+    diff_dict = anomaly_DJF(input_list, 'absolute')
+    assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_ABSOLUTE)
+    assert_allclose(diff_dict['diff'].time.values, expected_time)
+    assert_allclose(diff_dict['mean'].values, ANOMALY_MEAN)
 
 # Scaled method: (value - mean) / stdev
 def test_scaled_method():
-    dict_list = [SAMPLE_DICT_1, SAMPLE_DICT_2]
-    expected_diff = np.tile(np.array([ [[1, -1], [-1, 1]], [[-1, 1], [1, -1]] ]), (3, 1, 1))
-    expected_time = [0, 1, 5, 6, 7, 8]
-    expected_lat = [0.5, 1.5]
-    expected_lon = [0.5, 1.5]
-    diff_dict = anomaly_DJF(dict_list, 'scaled')
-    assert_allclose(diff_dict['diff'], expected_diff)
-    assert_allclose(diff_dict['time'], expected_time)
-    assert_allclose(diff_dict['lat'], expected_lat)
-    assert_allclose(diff_dict['lon'], expected_lon)
+    input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
+    expected_time = ANOMALY_TIME_1 + ANOMALY_TIME_2
+    diff_dict = anomaly_DJF(input_list, 'scaled')
+    assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_SCALED)
+    assert_allclose(diff_dict['diff'].time.values, expected_time)
+    assert_allclose(diff_dict['mean'].values, ANOMALY_MEAN)
 
 # Raised Errors
-def test_different_lat():
-    bad_dict_list = [SAMPLE_DICT_1, BAD_LAT_DICT]
-    assert_raises(ValueError, anomaly_DJF, bad_dict_list, 'absolute')
-
-def test_different_lon():
-    bad_dict_list = [SAMPLE_DICT_1, BAD_LON_DICT]
-    assert_raises(ValueError, anomaly_DJF, bad_dict_list, 'absolute')
-
 def test_invalid_method():
     bad_method = 'null'
-    dict_list = [SAMPLE_DICT_1, SAMPLE_DICT_2]
-    assert_raises(ValueError, anomaly_DJF, dict_list, bad_method)
+    input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
+    assert_raises(ValueError, anomaly_DJF, input_list, bad_method)
 
-# tests for find_coldest
+# def test_different_lat():
+#     bad_dict_list = [SAMPLE_DICT_1, BAD_LAT_DICT]
+#     assert_raises(ValueError, anomaly_DJF, bad_dict_list, 'absolute')
+
+# def test_different_lon():
+#     bad_dict_list = [SAMPLE_DICT_1, BAD_LON_DICT]
+#     assert_raises(ValueError, anomaly_DJF, bad_dict_list, 'absolute')
+
+#####################################
+##     TESTS: sample_coldtail      ##
+#####################################
+# Values for various percentile ranges
+def test_sample_percentile_low():
+    # NOTE: random seed is unecessary since we are sampling all events in the percentile range
+    num_events = len(SAMPLE_LOW_VALUES)
+    cold_events = sample_coldtail(SAMPLE_INPUT, num_events, SAMPLE_PERCENTILE_LOW)
+    sampled_values = np.sort(cold_events['temp anomaly'].to_numpy())
+    assert_allclose(sampled_values, SAMPLE_LOW_VALUES)
+
+def test_sample_percentile_mid():
+    # NOTE: random seed is unecessary since we are sampling all events in the percentile range
+    num_events = len(SAMPLE_MID_VALUES)
+    cold_events = sample_coldtail(SAMPLE_INPUT, num_events, SAMPLE_PERCENTILE_MID)
+    sampled_values = np.sort(cold_events['temp anomaly'].to_numpy())
+    assert_allclose(sampled_values, SAMPLE_MID_VALUES)
+
+def test_sample_percentile_high():
+    # NOTE: random seed is unecessary since we are sampling all events in the percentile range
+    num_events = len(SAMPLE_HIGH_VALUES)
+    cold_events = sample_coldtail(SAMPLE_INPUT, num_events, SAMPLE_PERCENTILE_HIGH)
+    sampled_values = np.sort(cold_events['temp anomaly'].to_numpy())
+    assert_allclose(sampled_values, SAMPLE_HIGH_VALUES)
+
+def test_sample_percentile_inbetween():
+    # NOTE: random seed is unecessary since we are sampling all events in the percentile range
+    # the bounds of this percentile range fall between elements
+    #  looking for sample_coldtail to pull from a conservative range (next above lower end, next below higher end)
+    num_events = len(SAMPLE_INBETWEEN_VALUES)
+    cold_events = sample_coldtail(SAMPLE_INPUT, num_events, SAMPLE_PERCENTILE_INBETWEEN)
+    sampled_values = np.sort(cold_events['temp anomaly'].to_numpy())
+    assert_allclose(sampled_values, SAMPLE_INBETWEEN_VALUES)
+
+# Random seed initialization
+def test_sample_seed():
+    cold_events = sample_coldtail(SAMPLE_INPUT, 2, (0, 100), seed=SAMPLE_SEED)
+    sampled_values = cold_events['temp anomaly'].to_numpy()
+    assert_allclose(sampled_values, SAMPLED_VALUES_WITH_SEED)
+
+# Correspondance of time, lat, lon, and value for a sample
+def test_sample_location_corresponds():
+    cold_events = sample_coldtail(SAMPLE_INPUT, 2, (0, 100), seed=SAMPLE_SEED)
+    single_event = cold_events.loc[0]
+    assert_allclose(single_event['time'], SAMPLE_SINGLE_EVENT['time'])
+    assert_allclose(single_event['lat'], SAMPLE_SINGLE_EVENT['lat'])
+    assert_allclose(single_event['lon'], SAMPLE_SINGLE_EVENT['lon'])
+    assert_allclose(single_event['temp anomaly'], SAMPLE_SINGLE_EVENT['temp anomaly'])
+
+#####################################
+##     TESTS: find_coldest      ##
+#####################################
 def test_sort_find_coldest():
     null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
     cold_events = find_coldest(SAMPLE_CLIMATOLOGY_DICT, 1, null_distinct)
     assert_allclose(cold_events.shape, (1, 5))
     assert_allclose(cold_events['temp anomaly'][0], np.nanmin(SAMPLE_TEMP_ANOMALY))
     assert_allclose((cold_events['time'][0], cold_events['lat'][0], cold_events['lon'][0]), COORDS_COLDEST_TEMP_ANOMALY)
-
-# tests for OLD_find_coldest:
-def test_find_coldest():
-    data_dict = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', (-np.inf, np.inf), (-np.inf, np.inf), testing=True)
-    null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
-    cold_events = OLD_find_coldest(data_dict, WINTER_IDX, 1, null_distinct)
-    assert_allclose(cold_events.shape, (1, 5))
-    assert_allclose(cold_events['2m temp'][0], COLDEST_LAND_TEMPERATURE)
-
-def test_find_distinct_in_time():
-    # mark coldest two as indistinct using time separation
-    data_dict = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', (-np.inf, np.inf), (-np.inf, np.inf), testing=True)
-    time_distinct = {'min time separation': 0.1, 'min lat separation': 10.0, 'min lon separation': 10.0} # 1st and 2nd coldest indistinct, 3rd is distinct from first two in time
-    cold_events = OLD_find_coldest(data_dict, WINTER_IDX, 2, time_distinct)
-    assert_allclose(cold_events['2m temp'][1], THIRD_COLDEST_LAND_TEMPERATURE)
-
-def test_find_distinct_in_latlon():
-    # mark coldest three as indistinct using lat/lon separation
-    data_dict = subset_nc(NC_SAMPLE_PATH, WINTER_IDX, 'TREFHT', (-np.inf, np.inf), (-np.inf, np.inf), testing=True)
-    lon_distinct = {'min time separation': 3.0, 'min lat separation': 10.0, 'min lon separation': 3.0} # 1st-2nd-3rd coldest indistinct, 4th is distinct from first three in longitude
-    cold_events = OLD_find_coldest(data_dict, WINTER_IDX, 2, lon_distinct)
-    assert_allclose(cold_events['2m temp'][1], FOURTH_COLDEST_LAND_TEMPERATURE)
