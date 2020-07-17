@@ -110,10 +110,12 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     # Randomly sample events from given percentile range
     num_notnan = np.count_nonzero(~np.isnan(temperature_anomaly))
     idx_lower = int(math.floor( (percentile_range[0]/100.)*num_notnan ))
-    idx_upper = int(math.floor( (percentile_range[1]/100.)*num_notnan ))
+    idx_upper = int(math.floor( (percentile_range[1]/100.)*num_notnan )) - 1
     if seed is not None:
         random.seed(seed)
-    samples = random.randint(idx_lower, idx_upper, number_of_events) # samples is a list of indices for the second index of sorted_idx
+    idx_in_percentile = np.arange(idx_lower, idx_upper + 1)
+    samples = random.choice(idx_in_percentile, number_of_events, replace=False)
+    #samples = random.randint(idx_lower, idx_upper, number_of_events) # samples is a list of indices for the second index of sorted_idx
 
     # Pull coordinate values cooresponding to samples
     sample_times, sample_times_idx = samples2values(samples, sorted_idx[0], times)
