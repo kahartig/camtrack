@@ -134,7 +134,7 @@ class ClimateAlongTrajectory:
 
         # Store requested climate variables
         for key in variables:
-            self.add_variable(key)
+            self.add_variable(key, pressure_levels=pressure_levels)
 
 
     def add_variable(self, variable, to_1D=False, pressure_levels=None):
