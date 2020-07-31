@@ -115,6 +115,7 @@ class ClimateAlongTrajectory:
         self.traj_time = xr.DataArray(time_coord['time'], dims=('time'), coords=time_coord)
         self.traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
         self.traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
+        self.traj_pres = xr.DataArray(self.trajectory['PRESSURE'].values, dims=('time'), coords=time_coord)
 
         # Set up subset to trajectory path        
         lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
@@ -182,10 +183,6 @@ class ClimateAlongTrajectory:
         else:
             variable_data = raw_data
 
-        # if interpolating 3-D onto 1-D, find pressures along trajectory
-        if to_1D:
-            traj_pres = xr.DataArray(self.trajectory['PRESSURE'].values, dims='time', coords=self.traj_time.coords)
-
         # Two-dimensional climate variables
         if variable_data.dims == ('time', 'lat', 'lon'):
             if self.traj_interpolation == 'nearest':
@@ -206,9 +203,9 @@ class ClimateAlongTrajectory:
             if to_1D:
                 # Interpolate onto trajectory pressure to collapse vertical dimension
                 if self.traj_interpolation == 'nearest':
-                    values = da_on_pressure_levels.sel(time=self.traj_time, pres=traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
+                    values = da_on_pressure_levels.sel(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
                 elif self.traj_interpolation == 'linear':
-                    values = da_on_pressure_levels.interp(time=self.traj_time, pres=traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='linear', kwargs={'bounds_error': True})
+                    values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='linear', kwargs={'bounds_error': True})
                 else:
                     raise ValueError("Invalid interpolation method onto trajectory '{}'. Must be 'nearest' or 'linear'".format(self.traj_interpolation))
                 variable = variable + '_1D'
