@@ -184,9 +184,7 @@ class ClimateAlongTrajectory:
 
         # if interpolating 3-D onto 1-D, find pressures along trajectory
         if to_1D:
-            pressures = self.traj_file.height2pressure(self.winter_file.directory, self.traj_number)['pressure']
-            time_coord = self.traj_time.coords
-            traj_pres = xr.DataArray(pressures.values, dims='time', coords=time_coord)
+            traj_pres = xr.DataArray(self.trajectory['PRESSURE'].values, dims='time', coords=self.traj_time.coords)
 
         # Two-dimensional climate variables
         if variable_data.dims == ('time', 'lat', 'lon'):

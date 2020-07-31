@@ -356,6 +356,8 @@ class TrajectoryFile:
             a copy of the requested trajectory data every 3 hours, but with new
             column 'pressure' of corresponding pressure level in Pa
         '''
+        print("DEPRECATED height2pressure:  Use 'PRESSURE' column of trajectory data instead")
+        
         winter_file = WinterCAM(cam_dir, self)
         trajectory = self.get_trajectory(trajectory_number, 3)
         pressures_from_h = []

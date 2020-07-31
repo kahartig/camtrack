@@ -618,8 +618,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         mesh_time, mesh_pres = np.meshgrid(time, pres)
 
         # Load parcel height in pressure coordinates
-        traj_w_height = trajfile.height2pressure(cam_dir, traj_number)
-        heights = traj_w_height['pressure']
+        heights = cat.trajectory['PRESSURE']
 
         for var_idx, variable in enumerate(cam_variables):
             var_label = '{} ({})'.format(cat.data[variable].long_name, cat.data[variable].units)
