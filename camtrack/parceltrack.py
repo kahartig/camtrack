@@ -96,7 +96,10 @@ class ClimateAlongTrajectory:
         # Store initial attributes
         self.winter_file = winter_file
         self.traj_file = trajectories
-        self.traj_interpolation = traj_interpolation
+        if (traj_interpolation == 'nearest') or (traj_interpolation == 'linear'):
+            self.traj_interpolation = traj_interpolation
+        else:
+            raise ValueError("Invalid interpolation method onto trajectory '{}'. Must be 'nearest' or 'linear'".format(traj_interpolation))
         self.traj_number = trajectory_number
 
         # Check that all requested variables exist in CAM files
@@ -195,8 +198,6 @@ class ClimateAlongTrajectory:
                 values = variable_data.sel(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
             elif self.traj_interpolation == 'linear':
                 values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method='linear', kwargs={'bounds_error': True})
-            else:
-                raise ValueError("Invalid interpolation method onto trajectory '{}'. Must be 'nearest' or 'linear'".format(self.traj_interpolation))
 
         # Three-dimensional climate variables
         elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
@@ -212,16 +213,12 @@ class ClimateAlongTrajectory:
                     values = da_on_pressure_levels.sel(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
                 elif self.traj_interpolation == 'linear':
                     values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method='linear', kwargs={'bounds_error': True})
-                else:
-                    raise ValueError("Invalid interpolation method onto trajectory '{}'. Must be 'nearest' or 'linear'".format(self.traj_interpolation))
                 variable = variable + '_1D'
             else:
                 if self.traj_interpolation == 'nearest':
                     values = da_on_pressure_levels.sel(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method='nearest')
                 elif self.traj_interpolation == 'linear':
                     values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method='linear', kwargs={'bounds_error': True})
-                else:
-                    raise ValueError("Invalid interpolation method onto trajectory '{}'. Must be 'nearest' or 'linear'".format(self.traj_interpolation))
         else:
             raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, variable_data.dims))
         
