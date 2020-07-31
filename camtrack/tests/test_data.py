@@ -35,11 +35,11 @@ TRAJ_DIRECTION = 'BACKWARD'
 TRAJ1_START_HEIGHT = 10.0  # starting height of trajectory 1 in sample file
 DIAG_VARS = ['PRESSURE']
 #  some data points from sample trajectory file
-TRAJ1_PRESSURE1 = 996.8  # 1st listed pressure for traj 1
+TRAJ1_PRESSURE1 = 99680.  # 1st listed pressure for traj 1, in Pa
 TRAJ2_HEIGHT3 = 502.2  # 3rd listed height for traj 2
 TRAJ2_LAT4 = 85.541  # 4th listed latitude for traj 2
-TRAJ1_2HOURLY_PRESSURES = np.array([1012.9, 1013.3, 1007.8])
-TRAJ1_2AGE_PRESSURES = np.array([1012.7, 1011.5, 996.8])
+TRAJ1_2HOURLY_PRESSURES = np.array([101290., 101330., 100780.]) # in Pa
+TRAJ1_2AGE_PRESSURES = np.array([101270., 101150., 99680.]) # in Pa
 #  trajectory winter years
 TRAJ_WINTER_DICT = {'first': '08', 'first-second': '08-09', 'firstsecond': '0809'}
 
