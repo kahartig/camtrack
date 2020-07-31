@@ -216,6 +216,10 @@ class TrajectoryFile:
         # convert longitudes from -180 to 180 to 0 to 360 scale for consistency with CAM files
         trajectories['lon'].mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
 
+        # convert units of PRESSURE from hPa to Pa
+        if 'PRESSURE' in self.diag_var_names:
+            trajectories['PRESSURE'] = 100. * trajectories['PRESSURE']
+
         # new column: datetime string
         def traj_datetime(row):
             return '00{:02.0f}-{:02.0f}-{:02.0f} {:02.0f}:{:02.0f}:00'.format(row['year'], row['month'], row['day'], row['hour'], row['minute'])
