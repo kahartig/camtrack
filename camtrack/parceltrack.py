@@ -121,8 +121,13 @@ class ClimateAlongTrajectory:
         lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
         lon_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lon'))))
         self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
-        self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
         self.subset_time = slice(min(self.traj_time.values), max(self.traj_time.values))
+        #   special instructions for longitude because it is periodic:
+        if (any(self.traj_lon < 10)) and (any(self.traj_lon > 350)):
+            # trajectory path crosses meridian -> include full longitude range
+            self.subset_lon = slice(0, 360)
+        else:
+            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
         
         # Store height and diagnostic output variables
         list_of_variables = []
