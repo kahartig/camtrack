@@ -4,23 +4,31 @@
 # time dimension
 
 # Read output path from command line argument
-if [ $# -ne 3 ]; then
-  echo "ERROR: Incorrect number of arguments; must provide start year, end"
-  echo "       year, and path to output file"
+if [ $# -ne 4 ]; then
+  echo "ERROR: Incorrect number of arguments; must provide case name, start"
+  echo "       year, end year, and path to output file"
   echo
-  echo "Usage: >>concat_all_winters <start year YY> <end year YY> <output path>"
+  echo "Usage: >>concat_all_winters <case name> <start year YY> <end year YY> <output path>"
   echo "    Using NCO command-line functions, this script takes Nov-Dec and"
   echo "    Jan-Feb from consecutive years between start year and end year and"
   echo "    concatenates along the time dimension to form 'winter' files"
   exit 2
 else
-  START_YEAR=$1
-  END_YEAR=$2
-  OUT_DIR=$3
+  CASE_NAME=$1
+  START_YEAR=$2
+  END_YEAR=$3
+  OUT_DIR=$4
 fi
 
-echo "Generating winter files, starting with $((START_YEAR))-$((START_YEAR+1))"
-echo "                       and ending with $((END_YEAR-1))-$((END_YEAR))"
+# CAM output files have the following file name format:
+#  ${CASE_NAME}.cam.h?.YYYY-MM-DD-${FILE_SUFFIX}.nc
+
+FILE_SUFFIX=00000  # CESM1.2.2 with CAM5
+#FILE_SUFFIX=10800  # CESM1.2.2 with CAM4 from Zeyuan
+
+echo "Generating winter files for CESM case ${CASE},"
+echo "    starting with    $((START_YEAR))-$((START_YEAR+1))"
+echo "    and ending with  $((END_YEAR-1))-$((END_YEAR))"
 
 # Loop over all years
 for ((Y = $START_YEAR ; Y < $END_YEAR ; Y++)); do
@@ -37,9 +45,9 @@ for ((Y = $START_YEAR ; Y < $END_YEAR ; Y++)); do
 	for HNUM in {1..4}; do
 		echo "  Concatenating h${HNUM} variables..."
 		# Define file locations and names
-		IN_FILE_1=${IN_DIR}/pi_3h.cam.h${HNUM}.00${YR1}-01-01-10800.nc
-		IN_FILE_2=${IN_DIR}/pi_3h.cam.h${HNUM}.00${YR2}-01-01-10800.nc
-		OUT_FILE=${OUT_DIR}/pi_3h_${YR1}${YR2}_h${HNUM}.nc
+		IN_FILE_1=${IN_DIR}/${CASE_NAME}.cam.h${HNUM}.00${YR1}-01-01-${FILE_SUFFIX}.nc
+		IN_FILE_2=${IN_DIR}/${CASE_NAME}.cam.h${HNUM}.00${YR2}-01-01-${FILE_SUFFIX}.nc
+		OUT_FILE=${OUT_DIR}/${CASE_NAME}_${YR1}${YR2}_h${HNUM}.nc
 		echo "    Input files:"
 		echo "      " $IN_FILE_1
 		echo "      " $IN_FILE_2
