@@ -23,6 +23,9 @@ winter_file = '0708'  # file extension for winter year
 indatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/CAM_output_winters/'
 outdatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/ARL_winters/'
 
+# Set case name
+case_name = 'pi_3h'
+
 # Function to convert from no-leap ordinal time to datetime.datetime timestamp
 # MeteoInfo's default method for this, sample_file.gettime(), assumes a Gregorian
 # calendar with leap years because the datetime module does as well; must
@@ -57,10 +60,10 @@ name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
                                 'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
 name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
                                 'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
-in_file_h1 = addfile(os.path.join(indatadir, 'pi_3h_' + winter_file + '_h1.nc'))
-in_file_h2 = addfile(os.path.join(indatadir, 'pi_3h_' + winter_file + '_h2.nc'))
-in_file_h3 = addfile(os.path.join(indatadir, 'pi_3h_' + winter_file + '_h3.nc'))
-in_file_h4 = addfile(os.path.join(indatadir, 'pi_3h_' + winter_file + '_h4.nc'))
+in_file_h1 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h1.nc'))
+in_file_h2 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h2.nc'))
+in_file_h3 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h3.nc'))
+in_file_h4 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h4.nc'))
 print 'opened netcdf file(s)' 
 h_to_file = {'h1': in_file_h1, 'h2': in_file_h2, 'h3': in_file_h3, 'h4': in_file_h4}
 
@@ -69,7 +72,7 @@ sample_file = in_file_h3  # contains 3-D wind data
 sample_variable = sample_file['U']  # sample variable for calculating dimensions and levels
 
 # Touch the output file without writing to it:
-out_filename = os.path.join(outdatadir, 'pi_3h_' + winter_file + '.arl')
+out_filename = os.path.join(outdatadir, case_name + '_' + winter_file + '.arl')
 open(out_filename, 'a').close();
 
 # Map CAM variables to ARL variables

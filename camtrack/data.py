@@ -14,10 +14,6 @@ Functions:
 
 ASSUMPTIONS:
     CAM time units are days since 0001-01-01 00:00:00 and calendar is 'noleap'
-    CONTROL file input data is stored in files named 'pi_3h_YYYY.arl' where e.g.
-        YYYY=0910 for the 0009-0010 winter
-    WinterCAM file names are in the format 'pi_3h_YYYY_h?.nc' where e.g.
-        YYYY=0910 for the 0009-0010 winter
 """
 
 # Standard imports
@@ -745,7 +741,7 @@ def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_boun
     return masked_variable
 
 
-def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj_dir, data_dir):
+def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj_dir, data_dir, case_name):
     '''
     Generate the CONTROL file that HYSPLIT uses to set up a backtracking run
     based on a time and location stored in 'event'
@@ -757,7 +753,7 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
 
     CONTROL files will be named CONTROL_<event_ID>
     trajectory files will be named traj_event<event_ID>.traj
-    Assumes that input data files are named 'pi_3h_YYYY.arl' where e.g.
+    Assumes that input data files are named case_name+'_YYYY.arl' where e.g.
         YYYY=0910 for the 0009-0010 winter
 
     Parameters
@@ -781,12 +777,14 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         HYSPLIT directory to output trajectory files, which will be named:
         traj_event<event_ID>.traj
     data_dir: string
-        path name of parent directory containing the data folder winter_YY-YY/
-        and data file pi_3h_YYYY.arl
+        path name of parent directory containing the binary format data file
+        case_name+'_YYYY.arl'
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
     '''
     # Set up file paths
     data_path = os.path.join(data_dir, '')  # with trailing slash
-    data_filename = 'pi_3h_' + winter_string(event['time'], 'firstsecond') + '.arl'
+    data_filename = case_name + '_' + winter_string(event['time'], 'firstsecond') + '.arl'
     traj_dir = os.path.join(traj_dir, '') # add trailing slash if not already there
     control_path = os.path.join(output_dir, 'CONTROL_' + str(event_ID))
     if not os.path.exists(output_dir):
