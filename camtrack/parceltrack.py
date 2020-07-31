@@ -157,13 +157,14 @@ class ClimateAlongTrajectory:
         to_1D: boolean
             determines whether a 3-D+time variable is interpolated onto
             trajectory height/pressure as well as latitude and longitude
-            If True and variable has dimensions (time, lev, lat, lon):
-                retrieve full air column along trajectory path
-                output dimensions are (time, pres)
             If False:
+                retrieve full air column along trajectory path
+                For 2-D+time variables, output dimensions are (time)
+                For 3-D+time variables, output dimensions are (time, pres)
+            If True and variable has dimensions (time, lev, lat, lon):
                 interpolate onto pressure as well as the usual time, lat, lon of
                 trajectory path
-                output dimensions are (time)
+                Output dimensions are (time)
             Default is False
         pressure_levels: array-like
             pressure levels, in Pa, to interpolate onto, if a 3-D+time variable
