@@ -22,7 +22,7 @@ from camtrack.data import TrajectoryFile, WinterCAM, subset_and_mask
 #####################################
 # Inputs
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-SAMPLE_TRAJ_PATH = os.path.join(TEST_DIR, 'sample_traj_for_CAM.traj')
+SAMPLE_TRAJ_PATH = os.path.join(TEST_DIR, 'sample_traj.traj')
 SAMPLE_TRAJ = TrajectoryFile(SAMPLE_TRAJ_PATH)
 
 # Outputs
@@ -32,14 +32,14 @@ TRAJ_GRIDS_MODEL = 'CAM4'
 #  trajectory initial condition header info
 NTRAJ = 2
 TRAJ_DIRECTION = 'BACKWARD'
-TRAJ1_START_HEIGHT = 10.0  # starting height of trajectory 1 in sample file
-DIAG_VARS = ['PRESSURE']
+TRAJ1_START_HEIGHT = 100.0  # starting height of trajectory 1 in sample file
+DIAG_VARS = ['PRESSURE', 'AIR_TEMP', 'TERR_MSL']
 #  some data points from sample trajectory file
-TRAJ1_PRESSURE1 = 99680.  # 1st listed pressure for traj 1, in Pa
-TRAJ2_HEIGHT3 = 502.2  # 3rd listed height for traj 2
-TRAJ2_LAT4 = 85.541  # 4th listed latitude for traj 2
-TRAJ1_2HOURLY_PRESSURES = np.array([101290., 101330., 100780.]) # in Pa
-TRAJ1_2AGE_PRESSURES = np.array([101270., 101150., 99680.]) # in Pa
+TRAJ1_PRESSURE1 = 97280.  # 1st listed pressure for traj 1, in Pa
+TRAJ2_HEIGHT3 = 513.9  # 3rd listed height for traj 2
+TRAJ2_LAT4 = 84.504 # 4th listed latitude for traj 2
+TRAJ1_2HOURLY_PRESSURES = np.array([95890., 96840., 97150.]) # in Pa
+TRAJ1_2AGE_PRESSURES = np.array([96490., 97090., 97280.]) # in Pa
 #  trajectory winter years
 TRAJ_WINTER_DICT = {'first': '08', 'first-second': '08-09', 'firstsecond': '0809'}
 
@@ -49,8 +49,8 @@ TRAJ_WINTER_DICT = {'first': '08', 'first-second': '08-09', 'firstsecond': '0809
 # Inputs
 # time range: 0008-12-01 00:00:00 to 0008-12-07 00:00:00 (YYYY-MM-DD HH:MM:SS)
 # latitude range: 80.52631579 to 90.0
-# longitude range: 320.0 to 330.0 (on 0-360 scale)
-SAMPLE_CAM_PATH = os.path.join(TEST_DIR, 'sample_CAM4_for_nosetests.nc')
+# longitude range: 320.0 to 345.0 (on 0-360 scale)
+SAMPLE_CAM_PATH = os.path.join(TEST_DIR, 'sample_CAM4.nc')
 SAMPLE_CAM = WinterCAM(SAMPLE_CAM_PATH)
 ABOVE_EXTRAP_THRESHOLD = 1e30 # fill value used by vinth2p when extrapolation is turned off
 VARS_WITH_SURFACE = ['T'] # variables with a surface-level added before interpolation
@@ -75,7 +75,7 @@ DESCENDING_PRESSURES = np.linspace(1.1e5, 1e4, 30)  # 1,100 to 100 hPa
 #     after interp U and T+TREFHT onto (ascending) pressure levels,
 #     this pressure level has fewer NaN values for T than U because
 #     of addition of surface-level data:
-PIDX_FEWER_NAN_WITH_SURFACE_DATA = -4 
+PIDX_FEWER_NAN_WITH_SURFACE_DATA = -4
 #  data values
 PSURF_FIRST_VALUE = 85657.61 # no subsetting
 PS_EXACT_FIRST_VALUE = 100528.586 # time=0008-12-01 00:00:00, lat=84.32, lon=322.5

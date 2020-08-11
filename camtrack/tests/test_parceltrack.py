@@ -21,13 +21,13 @@ from camtrack.data import TrajectoryFile, WinterCAM
 ##  Sample Trajectory for CAM Details  ##
 #########################################
 TEST_DIR = os.path.dirname(os.path.abspath(__file__))
-SAMPLE_TRAJ = TrajectoryFile(os.path.join(TEST_DIR, 'sample_traj_for_CAM.traj'))
+SAMPLE_TRAJ = TrajectoryFile(os.path.join(TEST_DIR, 'sample_traj.traj'))
 TRAJ_NUMBER = 1
 
 #####################################
 ##        Sample CAM Details       ##
 #####################################
-SAMPLE_CAM = WinterCAM(os.path.join(TEST_DIR, 'sample_CAM4_for_nosetests.nc'))
+SAMPLE_CAM = WinterCAM(os.path.join(TEST_DIR, 'sample_CAM4.nc'))
 VARIABLES_2D = ['PS']
 VARIABLES_3D = ['U']
 CAM_OUTPUT_CADENCE = 3 # hours
@@ -46,18 +46,20 @@ CAT_3D_NEAREST_ASC = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER
 
 # Outputs
 #    correspond to traj 1, age = -3 and age = 0 of SAMPLE_TRAJ
-PSURF_NEAREST = np.array([97791.79, 84785.91])
-PSURF_LINEAR = np.array([96472.89378072, 84859.42708281])
+PSURF_NEAREST = np.array([98434.875, 98783.21])
+PSURF_LINEAR = np.array([98447.28329206, 98692.00421007])
 UWIND_NEAREST_ASC = np.array([
-    [10.43023922, 10.02690618,  9.92227166,  9.75004783,  9.5248333, 9.26438415,  9.00442739,  8.45571027,  8.03413,     7.81050418, 7.90901281,  8.25621577,  8.61533068,  8.99251134,  9.36969199, 9.71098004, 10.04583621, 10.37089508, 10.62618473, 10.88147437, 11.19758911, 11.56344531, 11.90968008, 12.21037261, 12.27593719, 10.02478109, np.nan, np.nan, np.nan, np.nan], 
-    [ 9.86537773,  9.44583627,  8.08912645,  6.81425586,  5.2707048, 4.82852328,  3.59853404,  3.08969499,  3.11929866,  3.74333177, 4.35414374,  4.89929581,  5.44444788,  5.83499913,  6.22358004, 6.33994146,  6.3142298,   6.87861663,  8.14521847,  9.09696402,  9.89970177, 16.26494813, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+    [9.25380865, 9.22444147, 9.10755424, 8.9660217,  8.71305806, 8.36038698, 8.06076424, 7.53487811, 7.1987233,  7.2536702,  7.4353998,  7.74787241, 7.99421444, 8.09324479, 8.19227515, 8.46202295, 8.79105296, 9.12008297, 9.43044186, 9.74076036, 9.88033614, 9.77052806, 9.63172328, 9.3166928,  9.23678227, 8.52498717, np.nan, np.nan, np.nan, np.nan], 
+    [9.05710137, 9.20520922, 9.10250115, 8.69541636, 8.12081756, 7.51344471, 6.96502016, 6.42076322, 6.05987739, 6.09564285, 6.29882855, 6.70392884, 7.05974953, 7.27705818, 7.49436682, 7.80537604, 8.15948343, 8.51359082, 8.85979815, 9.20541062, 9.37381564, 9.18008749, 8.96230104, 8.32897139, 7.80192629, 7.20642263, np.nan, np.nan, np.nan, np.nan]
     ])
 UWIND_NEAREST_DES = np.flip(UWIND_NEAREST_ASC, axis=1)
 UWIND_LINEAR_ASC = np.array([
-    [10.3476441,   9.95376095,  9.65743452,  9.26977096,  8.82144278, 8.4492893,   8.16838821,  7.51185551,  7.22575491,  7.17502271, 7.54244316,  8.07365977,  8.50206856,  8.92360336,  9.31405017, 9.64395651,  9.97046127, 10.16566347, 10.29077666, 10.56213324, 11.15155597, 11.77067191, 12.3818393, 13.04354122, 12.49212827, np.nan, np.nan, np.nan, np.nan, np.nan],
-    [ 9.86227242,  9.4414325 ,  8.09042234,  6.822293,    5.2846976,  4.82911624,  3.59132831,  3.06603278,  3.08925859,  3.70339255, 4.30942843,  4.85912737,  5.40852038,  5.8034791,   6.19448654, 6.32136866,  6.30715881,  6.86046303,  8.10287125,  9.03993266, 9.8172146,   16.12436708, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+    [9.20695813, 9.19247124, 9.07204931, 8.92273465, 8.66395395, 8.30904572, 8.00633651, 7.49036272, 7.16256918, 7.22323298, 7.40569543, 7.71425062, 7.9579541,  8.05600083, 8.15404756, 8.42499919, 8.75670567, 9.08841694, 9.39859206, 9.70859021, 9.84652626, 9.72989902, 9.58338368, 9.2486444,  9.14007495, 8.42203269, np.nan, np.nan, np.nan, np.nan],
+    [8.71545702, 9.09818587, 9.20359496, 9.20831293, 9.07600804, 8.77140672, 8.39166261, 7.85658459, 7.42912571, 7.26357226, 7.29102819, 7.54075826, 7.76716319, 7.92593826, 8.08471333, 8.29148978, 8.52070261, 8.74991545, 9.00148329, 9.25357613, 9.35508924, 9.16801523, 8.95278062, 8.38174335, 7.93366477, 7.13464004, np.nan, np.nan, np.nan, np.nan]
     ])
 UWIND_LINEAR_DES = np.flip(UWIND_LINEAR_ASC, axis=1)
+UWIND_NEAREST_3DTO1D = np.array([8.52498717, 7.20642263])
+UWIND_LINEAR_3DTO1D = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
 
 #####################################
 ##  TESTS: ClimateAlongTrajectory  ##
@@ -120,6 +122,22 @@ def test_3Dvar_values_linear_descending():
     traj_interp_method = 'linear'
     uwind_along_traj = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3D, traj_interp_method, DESCENDING_PRESSURES).data['U']
     assert_allclose(uwind_along_traj.values, UWIND_LINEAR_DES)
+
+
+# Value check: 3-D -> 1-D variables
+def test_3Dto1D_values_nearest():
+    traj_interp_method = 'nearest'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3D, traj_interp_method, ASCENDING_PRESSURES)
+    cat.add_variable('U', True)
+    uwind_along_traj = cat.data['U_1D']
+    assert_allclose(uwind_along_traj.values, UWIND_NEAREST_3DTO1D)
+
+def test_3Dto1D_values_nearest():
+    traj_interp_method = 'linear'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3D, traj_interp_method, ASCENDING_PRESSURES)
+    cat.add_variable('U', True)
+    uwind_along_traj = cat.data['U_1D']
+    assert_allclose(uwind_along_traj.values, UWIND_LINEAR_3DTO1D)
 
 
 # Check attributes
