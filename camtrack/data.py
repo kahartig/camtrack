@@ -485,7 +485,7 @@ class WinterCAM:
         into a single dataset
     '''
 
-    def __init__(self, file_dir, trajectories=None, winter=None):
+    def __init__(self, file_dir, trajectories=None, winter=None, case_name=None):
         '''
         Parameters
         ----------
@@ -495,7 +495,7 @@ class WinterCAM:
             if trajectories is not None:
                 path to directory containing CAM files
                 assumes CAM file names within file_dir are in the format
-                'pi_3h_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
+                case_name+'_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
         trajectories: TrajectoryFile instance
             if None, then use file_dir as full path of netCDF file to load
             if not None, must be a family of trajectories that start at the same
@@ -506,6 +506,8 @@ class WinterCAM:
             indicates which winter to pull h1 through h4 files for
                 e.g. for 0009-0010 winter, winter='0910'
             mutually exclusive with trajectories
+        case_name: string
+            case name of CESM run and prefix of .nc and .arl data files
         '''
         # Store source directory
         self.directory = file_dir
@@ -522,17 +524,19 @@ class WinterCAM:
             else:
                 raise ValueError('Trajectories and winter arguments are mutually exclusive, only one or the other can be provided')
             # Read in h1, h2, h3, and h4 for the winter corresponding to trajectories
+            if case_name is None:
+                raise ValueError("Must provide case_name to read in netCDF files of the form 'file_dir/case_name_YYYY_h?.nc'")
             nc_file_path = os.path.join(
-                file_dir, 'pi_3h_' + winter_str + '_h1.nc')
+                file_dir, case_name + '_' + winter_str + '_h1.nc')
             ds1 = xr.open_dataset(nc_file_path)
             nc_file_path = os.path.join(
-                file_dir, 'pi_3h_' + winter_str + '_h2.nc')
+                file_dir, case_name + '_' + winter_str + '_h2.nc')
             ds2 = xr.open_dataset(nc_file_path)
             nc_file_path = os.path.join(
-                file_dir, 'pi_3h_' + winter_str + '_h3.nc')
+                file_dir, case_name + '_' + winter_str + '_h3.nc')
             ds3 = xr.open_dataset(nc_file_path)
             nc_file_path = os.path.join(
-                file_dir, 'pi_3h_' + winter_str + '_h4.nc')
+                file_dir, case_name + '_' + winter_str + '_h4.nc')
             ds4 = xr.open_dataset(nc_file_path)
 
             # Remove variables that should conflict between files before merging
