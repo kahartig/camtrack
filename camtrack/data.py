@@ -788,7 +788,7 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
     '''
     # Set up file paths
     data_path = os.path.join(data_dir, '')  # with trailing slash
-    data_filename = case_name + '_' + winter_string(event['time'], 'firstsecond') + '.arl'
+    data_filename = case_name + '_event' + str(event_ID) + '.arl'
     traj_dir = os.path.join(traj_dir, '') # add trailing slash if not already there
     control_path = os.path.join(output_dir, 'CONTROL_' + str(event_ID))
     if not os.path.exists(output_dir):
