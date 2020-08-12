@@ -139,7 +139,7 @@ def trajectory_path_plots(trajectory_paths):
     plt.close()
 
 
-def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None):
+def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, case_name, color=None):
     '''
     For the given trajectory paths and trajectory number, generate plots of the
     trajectory path overlaid by instantaneous horizontal wind vectors and,
@@ -158,6 +158,8 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None
         number corresponding to trajectory of interest
     cam_dir: path-like
         path to directory containing netCDF file(s) with wind data
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
     color: string or None
         if None:
             trajectory path will be a solid color
@@ -206,7 +208,7 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, color=None
         ax.set_boundary(circle, transform=ax.transAxes)
         
         # Interpolate wind onto path
-        winter_file = ct.WinterCAM(cam_dir, trajfile)
+        winter_file = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         pressure_levels = np.linspace(1.2e5, 300, 40)
         cat = ct.ClimateAlongTrajectory(winter_file, trajfile, traj_number, ['TREFHT'], 'linear')
         cat.add_variable('U', True, pressure_levels)
@@ -300,7 +302,7 @@ def trajectory_endpoints_plot(trajectory_list, save_file_path=None):
     plt.close()
 
 
-def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
+def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, case_name, pressure_levels=None):
     '''
     For each file in trajectory_paths, generate line plots of climate
     variables along all trajectories
@@ -338,6 +340,8 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
         interpolation method for matching trajectory lat-lon to CAM variables
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
     pressure_levels: array-like of floats
         pressure levels, in Pa, to interpolate onto for variables with a
         vertical level coordinate
@@ -377,7 +381,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
         # Load all trajectories for the event
         all_trajectories = []
         trajfile = ct.TrajectoryFile(traj_path)
-        camfile = ct.WinterCAM(cam_dir, trajfile)
+        camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         for traj_idx,df in trajfile.data.groupby(level=0):
             print('  Loading trajectory {}...'.format(traj_idx))
             all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method))
@@ -418,7 +422,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             ax.clear()
     plt.close()
 
-def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, pressure_levels=None):
+def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, case_name, pressure_levels=None):
     '''
     For each trajectory number in traj_numbers, generate line plots of
     climate variables across all events in trajectory_list.
@@ -456,6 +460,8 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         interpolation method for matching trajectory lat-lon to CAM variables
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
     pressure_levels: array-like of floats
         pressure levels, in Pa, to interpolate onto for variables with a
         vertical level coordinate
@@ -496,7 +502,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         all_ages = []
         for traj_path in trajectory_list:
             trajfile = ct.TrajectoryFile(traj_path)
-            camfile = ct.WinterCAM(cam_dir, trajfile)
+            camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
             cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
             all_events.append(cat)
             all_ages.append(cat.trajectory.index.values)
@@ -550,7 +556,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
     plt.close()
 
 
-def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels, traj_interp_method, cam_dir):
+def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels, traj_interp_method, cam_dir, case_name):
     '''
     For each file in trajectory_paths, generate contour plots in time and
     pressure of climate variables for a specific trajectory.
@@ -584,6 +590,8 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         interpolation method for matching trajectory lat-lon to CAM variables
     cam_dir: path-like or string
         path to directory where winter CAM files are stored
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
     '''
     # Parse input argument
     if isinstance(trajectory_paths, dict):
@@ -611,7 +619,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
 
         # Load trajectory for the event
         trajfile = ct.TrajectoryFile(traj_path)
-        camfile = ct.WinterCAM(cam_dir, trajfile)
+        camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
         time = cat.trajectory.index.values
         pres = cat.data.pres.values
