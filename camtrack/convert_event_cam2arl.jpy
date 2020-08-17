@@ -1,6 +1,6 @@
-# convert_cam_to_arl.jpy
+# convert_event_cam2arl.jpy
 # by Kara Hartig
-# last modified: August 11, 2020
+# last modified: August 17, 2020
 # based on:
 #     convert_cam_to_arl.py by Pratap Singh
 #     wrfout2arl.html by Yaqiang Wang
@@ -77,7 +77,8 @@ with open(events_file) as f:
     header = next(f)
     lines = f.readlines()
     for event_line in lines:
-        event_ID, ord_time, lat_str, lon_str = (event_line.strip()).split(',')
+        event_ID, time_str, lat_str, lon_str = (event_line.strip()).split(',')
+        ord_time = float(time_str)
         lat = float(lat_str)
         lon = float(lon_str)
         event_date = custom_ord2date(ord_time)
