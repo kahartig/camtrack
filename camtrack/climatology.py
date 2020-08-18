@@ -18,7 +18,6 @@ import math
 
 # Misc imports
 from numpy import random
-from operator import itemgetter
 
 
 def anomaly_DJF(data_list, method):
@@ -93,8 +92,8 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     """
     def samples2values(samples_idx, sorted_coord_idx, coordinates):
         # sorted_coord_idx = sorted_idx[index of desired coordinate]
-        coordinate_idx = list(itemgetter(*samples)(sorted_coord_idx))
-        coordinate_values = list(itemgetter(*coordinate_idx)(coordinates))
+        coordinate_idx = [sorted_coord_idx[idx] for idx in samples_idx]
+        coordinate_values = [coordinates[c_idx] for c_idx in coordinate_idx]
         return coordinate_values, coordinate_idx
 
     temperature_anomaly = climatology_dict['diff'].values
