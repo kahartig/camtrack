@@ -66,12 +66,17 @@ SAMPLE_SINGLE_EVENT = {'time': 0, 'lat': 2, 'lon': 0, 'temp anomaly': -3.}  # lo
 ##      Find Coldest Details       ##
 #####################################
 # Inputs
-SAMPLE_TEMP_ANOMALY = np.array([ [[5, 4], [3, 2]], [[-5, -4], [-3, np.nan]] ])
+DISTINCT_LAX = {'delta t': 0, 'delta lat': 0, 'delta lon': 0}
+DISTINCT_TIME = {'delta t': 11, 'delta lat': 0.5, 'delta lon': 0.5} # strict in time, lax in space
+DISTINCT_SPACE = {'delta t': 1, 'delta lat': 3, 'delta lon': 3} # lax in space, strict in time
+DISTINCT_STRICT = {'delta t': 12, 'delta lat': 5, 'delta lon': 5}
+FIND_NUM_EVENTS = 4
 
 # Outputs
-COORDS_COLDEST_TEMP_ANOMALY = (1, 0.5, 0.5) # in the order (time, lat, lon)
-SAMPLE_CLIMATOLOGY_DICT = {'diff': SAMPLE_TEMP_ANOMALY, 'time': [0, 1], 'lat': [0.5, 1.5], 'lon': [0.5, 1.5]}
-
+FIND_LAX_ANOMALIES = np.array(np.sort(ANOMALY_DIFF_ABSOLUTE, axis=None)[:FIND_NUM_EVENTS])
+FIND_TIME_EXCLUDED_ANOMALIES = np.array([-4., -3.5, -3., 5.])
+FIND_SPACE_EXCLUDED_ANOMALIES = np.array([-4., -3., 0., 5.])
+FIND_STRICT_ANOMALIES = np.array([-4.])
 
 #####################################
 ##      TESTS: anomaly_DJF         ##
@@ -161,9 +166,18 @@ def test_sample_location_corresponds():
 #####################################
 ##     TESTS: find_coldest      ##
 #####################################
-def test_sort_find_coldest():
-    null_distinct = {'min time separation': 0.01, 'min lat separation': 0.01, 'min lon separation': 0.01}
-    cold_events = find_coldest(SAMPLE_CLIMATOLOGY_DICT, 1, null_distinct)
-    assert_allclose(cold_events.shape, (1, 5))
-    assert_allclose(cold_events['temp anomaly'][0], np.nanmin(SAMPLE_TEMP_ANOMALY))
-    assert_allclose((cold_events['time'][0], cold_events['lat'][0], cold_events['lon'][0]), COORDS_COLDEST_TEMP_ANOMALY)
+def test_find_lax():
+    cold_events = find_coldest(SAMPLE_INPUT, FIND_NUM_EVENTS, DISTINCT_LAX)
+    assert_allclose(cold_events['temp anomaly'].to_numpy(), FIND_LAX_ANOMALIES)
+
+def test_find_exclude_with_time():
+    cold_events = find_coldest(SAMPLE_INPUT, FIND_NUM_EVENTS, DISTINCT_TIME)
+    assert_allclose(cold_events['temp anomaly'].to_numpy(), FIND_TIME_EXCLUDED_ANOMALIES)
+
+def test_find_exclude_with_space():
+    cold_events = find_coldest(SAMPLE_INPUT, FIND_NUM_EVENTS, DISTINCT_SPACE)
+    assert_allclose(cold_events['temp anomaly'].to_numpy(), FIND_SPACE_EXCLUDED_ANOMALIES)
+
+def test_find_strict():
+    cold_events = find_coldest(SAMPLE_INPUT, FIND_NUM_EVENTS, DISTINCT_STRICT)
+    assert_allclose(cold_events['temp anomaly'].to_numpy(), FIND_STRICT_ANOMALIES)
