@@ -195,7 +195,7 @@ def find_coldest(climatology_dict, number_of_events, distinct_conditions):
     idx = 1
     num_found = 1
     print('Starting loop over sorted temperature anomalies to identify cold events...')
-    while ((num_found < number_of_events) and (idx < len(times))):
+    while ((num_found < number_of_events) and (idx < np.prod(temperature_anomaly.shape))):
         time = times[sorted_idx[0][idx]]
         lat = latitudes[sorted_idx[1][idx]]
         lon = longitudes[sorted_idx[2][idx]]
@@ -216,7 +216,7 @@ def find_coldest(climatology_dict, number_of_events, distinct_conditions):
             event_idx.append(idx)
             num_found = num_found + 1
         idx = idx + 1
-    print('Found {:d} distinct cold events out of the {:d} coldest datapoints in sorted temperature anomaly array'.format(num_found, idx-1))
+    print('Found {:d} distinct cold events out of the {:d} coldest datapoints in sorted temperature anomaly array'.format(num_found, idx))
     
     # Pull coordinate values cooresponding to samples
     sample_times, sample_times_idx = samples2values(event_idx, sorted_idx[0], times)
