@@ -91,7 +91,7 @@ def anomaly_histogram(climatology_dict, percentiles=(5, 25, 50, 75, 95), save_fi
         print('Total time-lat-lon events: {}'.format(len(anomalies)))
         print('  events below 5th percentile: {}'.format(np.sum(anomalies < np.percentile(anomalies, 5))))
         if cold_events is not None:
-            print('  events in anomaly range of cold events: {}'.format(np.sum(anomalies_1d < max(ce_anomalies))))
+            print('  events in anomaly range of cold events: {}'.format(np.sum(anomalies < max(ce_anomalies))))
 
     # Save or display figure
     if save_file is None:
