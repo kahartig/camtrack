@@ -4,6 +4,7 @@ Author: Kara Hartig
 Plot trajectory paths or climate variables along paths by event or height
 
 Functions:
+    anomaly_histogram:  plot histogram of temperature anomaly distribution
     trajectory_path_plots:  for each event, plot all trajectory paths in North Polar Stereo, colored by initial height
     trajectory_path_with_wind:  for each event, plot a single trajectory path overlaid with instantaneous wind vectors
     trajectory_endpoints_plot:  plot end points of all trajectories provided
@@ -30,6 +31,74 @@ import cartopy.feature as cfeature
 
 # camtrack import
 import camtrack as ct
+
+def anomaly_histogram(climatology_dict, percentiles=(5, 25, 50, 75, 95), save_file=None, cold_events=None, print_diag=False):
+    '''
+    Generate histogram, with select percentile boundaries marked, of temperature
+    anomaly distribution
+
+    If cold_events is given, over-plot temperature anomalies corresponding to
+    sampled cold events
+
+    Parameters
+    ----------
+    climatology_dict: ict
+        dictionary such as the output of climatology.anomaly_DJF(), containing
+        'diff', a (time, lat, lon) DataArray of anomalies from a mean to be plot
+        as a histogram
+    percentiles: list-like
+        percentile boundaries to mark on the plot
+        Elements must be integers between 0 and 100
+        Default is (5, 25, 50, 75, 95)
+    save_file: string
+        if None, print plot to screen
+        if string, file destination for saving plot
+            format will be determined by filename extension
+        Default is None
+    cold_events: pandas DataFrame
+        contains time, location, and associated anomaly temperature of events
+        sampled from the distribution in climatology_dict
+        If not None, add markers to plot for all cold event anomaly values
+        Default is None
+    print_diag: boolean
+        if True, print total number of events in climatology_dict, number below
+        the 5th percentile, and number within the temperature anomaly range of
+        cold_events (if given)
+        Default is False
+    '''
+    raveled_anomalies = np.ravel(climatology_dict['diff'].values)
+    anomalies = raveled_anomalies[~np.isnan(raveled_anomalies)] # remove all NaN
+
+    # Initialize plot
+    fig, axs = plt.subplots(1, 1, figsize=(10,10))
+    plt.rcParams.update({'font.size': 14})  # set overall font size
+
+    # Generate histogram
+    counts_per_bin, bins, patches = axs.hist(anomalies, bins=20)
+    for p in percentiles:
+        p_value = np.percentile(anomalies, p)
+        axs.axvline(p_value, c='dimgrey', ls='--', zorder=1)
+        axs.annotate('{}%'.format(p), (p_value, max(counts_per_bin)),
+            horizontalalignment='right')
+    if cold_events is not None:
+        # Add markers for all cold events
+        ce_anomalies = cold_events['temp anomaly'].to_numpy()
+        ce_ycoords = np.zeros(len(ce_anomalies))
+        axs.scatter(ce_anomalies, ce_ycoords, c='red', marker='v', zorder=2)
+
+    # Print summary of distribution counts
+    if print_diag:
+        print('Total time-lat-lon events: {}'.format(len(anomalies)))
+        print('  events below 5th percentile: {}'.format(np.sum(anomalies < np.percentile(anomalies, 5))))
+        if cold_events is not None:
+            print('  events in anomaly range of cold events: {}'.format(np.sum(anomalies_1d < max(ce_anomalies))))
+
+    # Save or display figure
+    if save_file is None:
+        plt.show()
+    else:
+        fig.savefig(save_file)
+
 
 def trajectory_path_plots(trajectory_paths):
     '''
