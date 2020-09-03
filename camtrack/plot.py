@@ -86,6 +86,11 @@ def anomaly_histogram(climatology_dict, percentiles=(5, 25, 50, 75, 95), save_fi
         ce_ycoords = np.zeros(len(ce_anomalies))
         axs.scatter(ce_anomalies, ce_ycoords, c='red', marker='v', zorder=2)
 
+    # Add title and other labels
+    axs.set(title='Temperature anomaly distribution with percentiles',
+            xlabel=r'Temperature anomaly ($T - \overline{T}_{DJF}$) (C)',
+            ylabel='Counts: time-lat-lon events')
+
     # Print summary of distribution counts
     if print_diag:
         print('Total time-lat-lon events: {}'.format(len(anomalies)))
