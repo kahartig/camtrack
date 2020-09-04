@@ -106,8 +106,9 @@ class ClimateAlongTrajectory:
         if not all(key in winter_file.dataset.data_vars for key in variables):
             missing_keys = [
                 key for key in variables if key not in winter_file.dataset.data_vars]
-            raise ValueError(
-                'One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
+            if missing_keys != ['LWP']:
+                # exception for LWP, which has special handling in add_variable
+                raise ValueError('One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
     
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
@@ -223,7 +224,8 @@ class ClimateAlongTrajectory:
                 along_traj = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 along_traj_nan0 = along_traj.where(~np.isnan(along_traj.values), other=0.) # convert NaN to 0 so they don't contribute to integral
                 values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
-                values.name = 'LWP (kg/m^2)'
+                values.name = 'LWP'
+                variable = 'LWP' # re-set name for update to Dataset
             else:
                 values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
 
