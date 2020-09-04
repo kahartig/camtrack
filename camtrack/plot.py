@@ -525,6 +525,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         includes custom variables and HYSPLIT diagnostic output variables
         supported custom variables:
             'Net cloud forcing'
+            'LWP'
         HYSPLIT diagnostic output variables:
             'HEIGHT' is always available
             other diagnostic output variables are only available if
@@ -607,6 +608,15 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
                 sample_data = ev.data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
+            elif variable == 'LWP':
+                axs[var_idx].set_ylabel('kg/m^2')
+                axs[var_idx].set_title('Liquid water path (integral of Q)')
+                for ev_idx, ev in enumerate(all_events):
+                    time = all_ages[ev_idx]
+                    ev.add_variable(variable, pressure_levels=pressure_levels)
+                    plot_data = ev.data[variable].values
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
             else:
                 sample_data = all_events[0].data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
