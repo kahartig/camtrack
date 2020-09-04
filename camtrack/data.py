@@ -568,6 +568,10 @@ class WinterCAM:
         '''
         Interpolate data from CAM hybrid levels onto pressure levels
 
+        If interpolating temperature or specific humidity (variable_da.name is
+        'T' or 'Q'), add on corresponding surface-level data ('TREFHT' or
+        'QREFHT') before interpolating to pressure levels
+
         Parameters
         ----------
         variable_da: xarray.DataArray
@@ -656,24 +660,25 @@ class WinterCAM:
                 few order of magnitude before interpolating'.format(
                     replacement_threshold))
 
-        # If interpolating temperature, add on surface temperatures
+        # If interpolating temperature or humidity, add on surface-level data
         variable_values = variable_da.values
-        if variable_da.name == 'T':
+        if (variable_da.name == 'T') or (variable_da.name == 'Q'):
             hyam_surf = 0.
             hybm_surf = 0.999
             hyam = np.append(self.variable('hyam').values, hyam_surf)
             hybm = np.append(self.variable('hybm').values, hybm_surf)
-            # Add singleton 'lev' dimension to TREFHT (surface temperature)
+            # Add singleton 'lev' dimension to ?REFHT (surface-level data)
+            surface_key = variable_da.name + 'REFHT'
             if roll_lon:
-                reduced_T_surf = self.variable('TREFHT').sel(time=time_slice)
-                rolled_T_surf = assist.roll_longitude(reduced_T_surf)
-                T_surf = rolled_T_surf.sel(lat=lat_slice, lon=lon_slice)
+                reduced_surf_data = self.variable(surface_key).sel(time=time_slice)
+                rolled_surf_data = assist.roll_longitude(reduced_surf_data)
+                subset_surf_data = rolled_surf_data.sel(lat=lat_slice, lon=lon_slice)
             else:
-                T_surf = self.variable('TREFHT').sel(time=time_slice, lat=lat_slice, lon=lon_slice)
-            T_surf_newcoord = T_surf.assign_coords(lev=1000*(hyam_surf + hybm_surf))
-            T_surf_expanded = T_surf_newcoord.expand_dims('lev')
-            # Concatenate TREFHT onto T
-            variable_values = xr.concat([variable_da, T_surf_expanded], dim='lev').values
+                subset_surf_data = self.variable(surface_key).sel(time=time_slice, lat=lat_slice, lon=lon_slice)
+            surf_newcoord = subset_surf_data.assign_coords(lev=1000*(hyam_surf + hybm_surf))
+            surf_expanded = surf_newcoord.expand_dims('lev')
+            # Concatenate surface-level data onto 3-D
+            variable_values = xr.concat([variable_da, surf_expanded], dim='lev').values
 
         on_p_levels = Ngl.vinth2p(variable_values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
         
