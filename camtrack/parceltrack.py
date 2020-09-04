@@ -158,6 +158,9 @@ class ClimateAlongTrajectory:
             if to_1D=True, also interpolate onto the trajectory pressure
                 output dimensions are (time)
 
+        Special treatment for liquid water path:
+            if variable='LWP', return vertical integral of Q along trajectory
+
         Parameters
         ----------
         variable: string
@@ -184,6 +187,13 @@ class ClimateAlongTrajectory:
             instead
             Default is None
         '''
+        # Add special treatment for liquid water path (LWP)
+        if variable == 'LWP':
+            variable = 'Q'
+            v_int = True
+        else:
+            v_int = False
+
         raw_data = self.winter_file.variable(variable).sel(time=self.subset_time)
 
         # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
@@ -208,6 +218,12 @@ class ClimateAlongTrajectory:
                 # Interpolate onto trajectory pressure to collapse vertical dimension
                 values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 variable = variable + '_1D'
+            elif v_int:
+                unit_conversion = 1/9.81 # LWP = Q*dp/g
+                along_traj = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
+                along_traj_nan0 = along_traj.where(~np.isnan(along_traj.values), other=0.) # convert NaN to 0 so they don't contribute to integral
+                values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
+                values.name = 'LWP (kg/m^2)'
             else:
                 values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
 
