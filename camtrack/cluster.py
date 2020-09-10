@@ -6,13 +6,22 @@ Perform and analyze cluster analysis of trajectories
 Classes:
   
 Functions:
-    shift_origin: shift start point of a group of traj files onto a common origin
+    shift_origin:  shift start point of a group of traj files onto a common origin
+    cluster_paths:  plot trajectory paths by cluster
 """
 
 # Standard imports
 import numpy as np
 import pandas as pd
 import os
+
+# Matplotlib imports
+import matplotlib.pyplot as plt
+import matplotlib.path as mpath
+
+# Cartopy imports
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 
 # camtrack import
 import camtrack as ct
@@ -118,3 +127,75 @@ def shift_origin(trajectory_paths, common_origin, output_dir):
         with open(new_file, 'a') as newf:
             np.savetxt(newf, trajectory.values, fmt=data_fmt)
     print('Finished shifting trajs to common origin lat {:.2f}, lon {:.2f}'.format(common_origin['lat'], common_origin['lon']))
+
+def cluster_paths(num_clusters, cluster_dir, save_file_path=None):
+    '''
+    Plot trajectory paths by cluster
+
+    Parameters
+    ----------
+    num_clusters: int
+        number of clusters, used to load CLUSLIST_? file
+    cluster_dir: str
+        path to CLUSLIST_? and shifted trajectory files
+    save_file_path: str
+        if None, print plots to screen
+        if str, save plots to full file path provided
+    '''
+    cluslist_file = os.path.join(cluster_dir, 'CLUSLIST_{}'.format(num_clusters))
+    cluslist_cols = ['cluster', 'num in cluster', 'start year', 'start month', 'start day', 'start hour', 'idx+1', 'traj file']
+    cluslist_col_widths = [5, 6, 5, 3, 3, 3, 6, 100]
+    clusters = pd.read_fwf(cluslist_file, widths=cluslist_col_widths, names=cluslist_cols)
+
+    # Initialize plots
+    num_plots = num_clusters + 1
+    fig, axs = plt.subplots(num_plots, 1, figsize=(10, 10*num_plots), subplot_kw={'projection': ccrs.NorthPolarStereo(central_longitude=-100)})
+    plt.rcParams.update({'font.size': 14})  # set overall font size
+
+    # Set up circular outer boundary
+    theta = np.linspace(0, 2 * np.pi, 100)
+    center, radius = [0.5, 0.5], 0.5
+    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+    circle = mpath.Path(verts * radius + center)
+
+    # All trajectories
+    axs[0].set_extent([-180, 180, 40, 90], crs=ccrs.PlateCarree())
+    # Add features
+    axs[0].add_feature(cfeature.LAND)
+    axs[0].add_feature(cfeature.COASTLINE)
+    axs[0].gridlines(color='black', linestyle='dotted')
+    axs[0].set(title='All trajectories')
+    axs[0].set_boundary(circle, transform=axs[0].transAxes)
+    for traj_name in clusters['traj file']:
+        trajfile = ct.TrajectoryFile(os.path.join(cluster_dir, traj_name))
+        trajectory = trajfile.get_trajectory(1, 3)
+        axs[0].plot(trajectory['lon'].values, trajectory['lat'].values, c='black', linewidth=1., transform=ccrs.Geodetic())
+
+    # By cluster
+    for cluster_number in range(1, num_clusters + 1):
+        idx_ax = cluster_number
+        axs[idx_ax].set_extent([-180, 180, 40, 90], crs=ccrs.PlateCarree())
+        axs[idx_ax].add_feature(cfeature.LAND)
+        axs[idx_ax].add_feature(cfeature.COASTLINE)
+        axs[idx_ax].gridlines(color='black', linestyle='dotted')
+        axs[idx_ax].set_boundary(circle, transform=axs[idx_ax].transAxes)
+        axs[idx_ax].set(title='Cluster {}'.format(cluster_number))
+        # plot all trajectories in cluster:
+        for traj_name in clusters.loc[clusters['cluster'] == cluster_number]['traj file']:
+            trajfile = ct.TrajectoryFile(os.path.join(cluster_dir, traj_name))
+            trajectory = trajfile.get_trajectory(1, 3)
+            traj_label = 'Event ' + traj_name[-7:-5]
+            axs[idx_ax].plot(trajectory['lon'].values, trajectory['lat'].values, label=traj_label, linewidth=1.5, transform=ccrs.Geodetic(), zorder=1)
+        # plot cluster mean:
+        cluster_mean_file = os.path.join(cluster_dir, 'C{}mean.tdump'.format(cluster_number))
+        cluster_mean = ct.TrajectoryFile(cluster_mean_file)
+        cluster_mean_trajectory = cluster_mean.get_trajectory(1, 3)
+        axs[idx_ax].plot(cluster_mean_trajectory['lon'].values, cluster_mean_trajectory['lat'].values, '--', label='Cluster mean', c='black', linewidth=3., transform=ccrs.Geodetic(), zorder=2)
+        axs[idx_ax].legend(loc='upper right', fontsize=11)
+
+    # Save or print to screen
+    if save_file_path is None:
+        plt.show()
+    else:
+        fig.savefig(save_file_path)
+    plt.close()
