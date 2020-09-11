@@ -8,6 +8,7 @@ Classes:
 Functions:
     shift_origin:  shift start point of a group of traj files onto a common origin
     cluster_paths:  plot trajectory paths by cluster
+    cluster_line_plots:  interpolate climate variables onto trajectory paths and plot by cluster
 """
 
 # Standard imports
@@ -199,3 +200,147 @@ def cluster_paths(num_clusters, cluster_dir, save_file_path=None):
     else:
         fig.savefig(save_file_path)
     plt.close()
+
+def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_method, traj_dir, cam_dir, case_name, save_dir=None, pressure_levels=None):
+    '''
+    Interpolate climate variables onto trajectory paths and plot by cluster
+
+    To print plots to screen, leave save_dir to default (None).
+    To save plots to file, provide path-like to save_dir and plots will be saved
+    as 'cluster{}_line_plots.png'.format(cluster_number).
+    Each figure is a column of subplots, each subplot corresponding to a
+    different variable in cam_variables and other_variables. Colored lines are
+    from individual trajectories, black lines are averages across all events in
+    cluster.
+
+    Parameters
+    ----------
+    cluslist: path-like or string
+        full path to CLUSLIST_{} file (produced by HYSPLIT) containing all
+        trajectory file names and their assigned cluster number
+    cam_variables: list-like of strings
+        list of CAM variables to plot
+        must correpond to 2-D variables with dimensions (time, lat, lon)
+    other_variables: list-like of strings
+        list of non-CAM variables to plot
+        includes custom variables and HYSPLIT diagnostic output variables
+        supported custom variables:
+            'Net cloud forcing'
+            'LWP'
+            '<3D>_1D' where <3D> is the variable name of some 3-D variable to
+                interpolate directly onto the trajectory path
+                Must provide pressure_levels
+        HYSPLIT diagnostic output variables:
+            'HEIGHT' is always available
+            other diagnostic output variables are only available if
+            corresponding SETUP.CFG variable in HYSPLIT was set to 1 when
+            trajectories were generated
+    traj_interp_method: 'nearest' or 'linear'
+        interpolation method for matching trajectory lat-lon to CAM variables
+    traj_dir: path-like or string
+        path to directory where .traj files are stored
+    cam_dir: path-like or string
+        path to directory where winter CAM files are stored
+    case_name: string
+        case name of CESM run and prefix of .nc and .arl data files
+    save_dir: path-like or string
+        if None, print plots to screen
+        if path-like or string, directory in which to save plots
+        Default is None
+    pressure_levels: array-like of floats
+        pressure levels, in Pa, to interpolate onto for variables with a
+        vertical level coordinate
+        Only used if requesting 3-D variables interpolated directly onto
+        trajectory path in other_variables
+        Default is None
+    '''
+    var_to_plot = cam_variables + other_variables
+    num_plots = len(var_to_plot)
+
+    # Retrieve total number of clusters from CLUSLIST file name
+    cluslist_path, cluslist_filename = os.path.split(cluslist)
+    total_clusters = int(cluslist_filename.split('_')[1])
+
+    # Traj file info
+    shifted_prefix = 'shifted_'
+    traj_number = 1
+
+    # Load CLUSLIST file
+    total_clusters = cluslist[-1]
+    cluslist_cols = ['cluster', 'num in cluster', 'start year', 'start month', 'start day', 'start hour', 'event+1', 'traj file']
+    cluslist_col_widths = [5, 6, 5, 3, 3, 3, 6, 100] # final col for .traj file name
+    clusters = pd.read_fwf(cluslist, widths=cluslist_col_widths, names=cluslist_cols)
+
+    # Plot by cluster
+    for cluster_number in range(1, total_clusters + 1):
+        fig, axs = plt.subplots(num_plots, 1, figsize=(8,4*num_plots))
+
+        # Load all trajectories in cluster
+        cluster_cats = []
+        cluster_names = []
+        cluster_ages = []
+        for shifted_traj_name in clusters.loc[clusters['cluster'] == cluster_number]['traj file']:
+            traj_name = shifted_traj_name.replace(shifted_prefix, '') # strip prefix from traj file name
+            trajfile = ct.TrajectoryFile(os.path.join(traj_dir, traj_name))
+            camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
+            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
+            cluster_cats.append(cat)
+            cluster_names.append(traj_name)
+            cluster_ages.append(cat.trajectory.index.values)
+        max_age = max(len(age) for age in cluster_ages)
+
+        # Plot all variables
+        for var_idx, variable in enumerate(var_to_plot):
+            axs[var_idx].set_xlabel('Trajectory Age (hours)')
+            sum_all_events = np.ma.empty((len(cluster_cats), max_age))
+            sum_all_events.mask = True
+            if variable == 'Net cloud forcing':
+                for ev_idx, ev in enumerate(cluster_cats):
+                    time = cluster_ages[ev_idx]
+                    plot_data = ev.data['LWCF'].values + ev.data['SWCF'].values
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                sample_data = ev.data['LWCF']
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title('LWCF + SWCF: Net cloud forcing')
+            elif variable[-3:] == '_1D':
+                variable_key = variable[:-3]
+                for ev_idx, ev in enumerate(cluster_cats):
+                    time = cluster_ages[ev_idx]
+                    ev.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
+                    plot_data = ev.data[variable].values
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                sample_data = ev.data[variable]
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
+            elif variable == 'LWP':
+                for ev_idx, ev in enumerate(cluster_cats):
+                    time = cluster_ages[ev_idx]
+                    ev.add_variable(variable, pressure_levels=pressure_levels)
+                    plot_data = ev.data[variable].values
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                axs[var_idx].set_ylabel('kg/m^2')
+                axs[var_idx].set_title('LWP: Liquid water path (integral of Q)')
+            else:
+                for ev_idx, ev in enumerate(cluster_cats):
+                    time = cluster_ages[ev_idx]
+                    plot_data = ev.data[variable].values
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                    sum_all_events[ev_idx, -len(time):] = plot_data
+                sample_data = ev.data[variable]
+                axs[var_idx].set_ylabel(sample_data.units)
+                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
+            avg_all_events = sum_all_events.mean(axis=0)
+            axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '--', linewidth=2., c='black', label='mean of cluster')
+            axs[var_idx].legend()
+
+        plt.tight_layout(h_pad=2.0)
+        if save_dir is None:
+            plt.show()
+        else:
+            save_file_path = os.path.join(save_dir, 'cluster{}_line_plots.png'.format(cluster_number))
+            fig.savefig(save_file_path)
+            print('Finished saving line plots for cluster {}...'.format(cluster_number))
+        plt.close()
