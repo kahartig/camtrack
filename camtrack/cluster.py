@@ -339,9 +339,9 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
             avg_all_events = sum_all_events.mean(axis=0)
-            axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '--', linewidth=2., c='black', label='mean of cluster')
-            axs[var_idx].legend()
+            axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '--', linewidth=3., c='black', label='mean of cluster')
 
+        axs[-1].legend()
         plt.tight_layout(h_pad=2.0)
         if save_dir is None:
             plt.show()
