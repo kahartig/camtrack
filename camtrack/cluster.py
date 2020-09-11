@@ -157,7 +157,7 @@ def cluster_paths(cluslist, cluster_dir, save_file_path=None):
     # Initialize plots
     num_plots = num_clusters + 1
     fig, axs = plt.subplots(num_plots, 1, figsize=(10, 10*num_plots), subplot_kw={'projection': ccrs.NorthPolarStereo(central_longitude=-100)})
-    plt.rcParams.update({'font.size': 14})  # set overall font size
+    plt.rcParams.update({'font.size': 18})  # set overall font size
 
     # Set up circular outer boundary
     theta = np.linspace(0, 2 * np.pi, 100)
@@ -201,6 +201,7 @@ def cluster_paths(cluslist, cluster_dir, save_file_path=None):
         axs[idx_ax].legend(loc='upper right', fontsize=11)
 
     # Save or print to screen
+    plt.tight_layout(h_pad=2.0)
     if save_file_path is None:
         plt.show()
     else:
