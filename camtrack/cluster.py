@@ -129,24 +129,30 @@ def shift_origin(trajectory_paths, common_origin, output_dir):
             np.savetxt(newf, trajectory.values, fmt=data_fmt)
     print('Finished shifting trajs to common origin lat {:.2f}, lon {:.2f}'.format(common_origin['lat'], common_origin['lon']))
 
-def cluster_paths(num_clusters, cluster_dir, save_file_path=None):
+def cluster_paths(cluslist, cluster_dir, save_file_path=None):
     '''
     Plot trajectory paths by cluster
 
     Parameters
     ----------
-    num_clusters: int
-        number of clusters, used to load CLUSLIST_? file
-    cluster_dir: str
-        path to CLUSLIST_? and shifted trajectory files
-    save_file_path: str
+    cluslist: path-like or string
+        full path to CLUSLIST_{} file (produced by HYSPLIT) containing all
+        trajectory file names and their assigned cluster number
+    cluster_dir: path-like or string
+        path to directory where cluster mean files (C?mean.tdump) and shifted
+        traj files (shifted_traj_event??.traj) listed in cluslist are stored
+    save_file_path: path-like or string
         if None, print plots to screen
-        if str, save plots to full file path provided
+        if path-like or str, save plots to full file path provided
     '''
-    cluslist_file = os.path.join(cluster_dir, 'CLUSLIST_{}'.format(num_clusters))
+    # Retrieve total number of clusters from CLUSLIST file name
+    cluslist_path, cluslist_filename = os.path.split(cluslist)
+    num_clusters = int(cluslist_filename.split('_')[1])
+
+    # Load CLUSLIST file
     cluslist_cols = ['cluster', 'num in cluster', 'start year', 'start month', 'start day', 'start hour', 'idx+1', 'traj file']
     cluslist_col_widths = [5, 6, 5, 3, 3, 3, 6, 100]
-    clusters = pd.read_fwf(cluslist_file, widths=cluslist_col_widths, names=cluslist_cols)
+    clusters = pd.read_fwf(cluslist, widths=cluslist_col_widths, names=cluslist_cols)
 
     # Initialize plots
     num_plots = num_clusters + 1
@@ -266,7 +272,6 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
     traj_number = 1
 
     # Load CLUSLIST file
-    total_clusters = cluslist[-1]
     cluslist_cols = ['cluster', 'num in cluster', 'start year', 'start month', 'start day', 'start hour', 'event+1', 'traj file']
     cluslist_col_widths = [5, 6, 5, 3, 3, 3, 6, 100] # final col for .traj file name
     clusters = pd.read_fwf(cluslist, widths=cluslist_col_widths, names=cluslist_cols)
