@@ -341,12 +341,13 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
             avg_all_events = sum_all_events.mean(axis=0)
             axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '--', linewidth=3., c='black', label='mean of cluster')
 
-        axs[-1].legend()
+        handles, labels = axs[-1].get_legend_handles_labels()
+        legend = fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout(h_pad=2.0)
         if save_dir is None:
             plt.show()
         else:
             save_file_path = os.path.join(save_dir, 'cluster{}_line_plots.png'.format(cluster_number))
-            fig.savefig(save_file_path)
+            fig.savefig(save_file_path, bbox_extra_artists=[legend,], bbox_inches='tight')
             print('Finished saving line plots for cluster {}...'.format(cluster_number))
         plt.close()
