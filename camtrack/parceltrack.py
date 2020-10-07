@@ -85,7 +85,15 @@ class ClimateAlongTrajectory:
             number corresponding to trajectory of interest; the trajectory data
             is retrieved with trajectories.data.loc[trajectory_number]
         variables: list of strings
-            list of CAM variables (field names in all caps) that will be stored
+            list of variables that will be stored
+            Must be a CAM variable name (field in all caps) OR one of two types
+            of special variables:
+                ends in '_1D': 3-D+time variable to be interpolated directly
+                    onto trajectory path
+                ends in '_hc': variable with special handling that has been
+                    hard-coded in camtrack. Available options:
+                    'LWP_hc': liquid water path (vertical integral of 'Q')
+                    'THETA_hc': potential temperature
         traj_interpolation: 'nearest' or 'linear'
             interpolation method for matching trajectory lat-lon to CAM variables
         pressure_levels: array-like of floats
@@ -103,13 +111,27 @@ class ClimateAlongTrajectory:
         self.traj_number = trajectory_number
 
         # Check that all requested variables exist in CAM files
-        if not all(key in winter_file.dataset.data_vars for key in variables):
-            missing_keys = [
-                key for key in variables if key not in winter_file.dataset.data_vars]
-            if missing_keys != ['LWP']:
-                # exception for LWP, which has special handling in add_variable
-                raise ValueError('One or more variable names provided is not present in CAM output files. Invalid name(s): {}'.format(missing_keys))
-    
+        cam_variables = [key for key in variables if '_' not in key]
+        to1D_variables = [key.split('_', 1)[0] for key in variables if '_1D' in key]
+        hc_variables = [key for key in variables if '_hc' in key]
+        #  standard CAM variables
+        missing_cam = [key for key in cam_variables if key not in winter_file.dataset.data_vars]
+        if missing_cam:
+            raise ValueError('CAM output files are missing one or more of the variable names requested. Invalid name(s): {}'.format(missing_cam))
+        #  interpolation to 1D variables
+        missing_to1D = [key for key in to1D_variables if key not in winter_file.dataset.data_vars]
+        if missing_to1D:
+            raise ValueError("CAM output files are missing one or more variables to be interpolated to 1D (ending in '_1D'). Invalid name(s): {}".format(missing_to1D))
+        #  hard-coded variables
+        hc_requires = []
+        if 'LWP_hc' in hc_variables:
+            hc_requires.append('Q')
+        if 'THETA_hc' in hc_variables:
+            hc_requires.append('T')
+        missing_hc = [key for key in hc_requires if key not in winter_file.dataset.data_vars]
+        if missing_hc:
+            raise ValueError("CAM output files are missing one or more variables required by a requested hard-coded variable (ending in '_hc'). Note that 'LWP_hc' requires 'Q' and 'THETA_hc' requires 'T'.")
+
         # Select a single trajectory
         self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
         self.direction = trajectories.direction
@@ -134,20 +156,20 @@ class ClimateAlongTrajectory:
             self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
         
         # Store height and diagnostic output variables
-        list_of_variables = []
+        diagnostic_variables = []
         height_attrs = {'units': 'm above ground level', 'long_name': 'Parcel height above ground level'}
-        list_of_variables.append(xr.DataArray(self.trajectory['height (m)'].values, name='HEIGHT', attrs=height_attrs, dims=('time'), coords=time_coord))
+        diagnostic_variables.append(xr.DataArray(self.trajectory['height (m)'].values, name='HEIGHT', attrs=height_attrs, dims=('time'), coords=time_coord))
         for key in trajectories.diag_var_names:
             key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
-            list_of_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
-        self.data = xr.merge(list_of_variables)        
+            diagnostic_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
+        self.data = xr.merge(diagnostic_variables)        
 
         # Store requested climate variables
         for key in variables:
             self.add_variable(key, pressure_levels=pressure_levels)
 
 
-    def add_variable(self, variable, to_1D=False, pressure_levels=None):
+    def add_variable(self, variable_key, pressure_levels=None):
         '''
         Interpolate a new variable onto trajectory path
 
@@ -188,13 +210,26 @@ class ClimateAlongTrajectory:
             instead
             Default is None
         '''
-        # Add special treatment for liquid water path (LWP)
-        if variable == 'LWP':
-            variable = 'Q'
-            v_int = True
+        # Identify if variable requires special handling
+        to_1D = False
+        hardcoded = False
+        if '_' in variable_key:
+            prefix, suffix = variable_key.split('_', 1)
+            if suffix == '1D':
+                to_1D = True
+                variable = prefix
+            elif suffix == 'hc':
+                hardcoded = True
+                if prefix == 'LWP':
+                    variable = 'Q'
+                elif prefix == 'THETA':
+                    variable = 'T'
+                else:
+                    raise ValueError('Invalid Variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
+            else:
+                raise ValueError("Invalid suffix {} for variable key {}; must be '1D' or 'hc'".format(suffix, variable_key))
         else:
-            v_int = False
-
+            variable = variable_key
         raw_data = self.winter_file.variable(variable).sel(time=self.subset_time)
 
         # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
@@ -206,6 +241,7 @@ class ClimateAlongTrajectory:
         # Two-dimensional climate variables
         if variable_data.dims == ('time', 'lat', 'lon'):
             values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
+            variable_name = variable
 
         # Three-dimensional climate variables
         elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
@@ -218,22 +254,31 @@ class ClimateAlongTrajectory:
             if to_1D:
                 # Interpolate onto trajectory pressure to collapse vertical dimension
                 values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                variable = variable + '_1D'
-            elif v_int:
+                variable_name = variable_key
+            elif hardcoded and (prefix == 'LWP'):
                 unit_conversion = 1/9.81 # LWP = Q*dp/g
                 along_traj = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 along_traj_nan0 = along_traj.where(~np.isnan(along_traj.values), other=0.) # convert NaN to 0 so they don't contribute to integral
                 values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
                 values.name = 'LWP'
-                variable = 'LWP' # re-set name for update to Dataset
+                variable_name = 'LWP'
+            elif hardcoded and (prefix == 'THETA'):
+                p_0 = 1e5 # reference pressure 1,000 hPa
+                kappa = 2./7. # Poisson constant
+                T_values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
+                p_values = self.traj_pres
+                values = T_values * (p_0 / p_values)**kappa
+                values.name = 'THETA'
+                variable_name = 'THETA'
             else:
                 values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
+                variable_name = variable
 
         else:
             raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, variable_data.dims))
         
         # Update Dataset with new DataArray
-        self.data[variable] = values
+        self.data[variable_name] = values
 
     def setup_pinterp(self, pressure_levels):
         '''
