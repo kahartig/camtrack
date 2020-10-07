@@ -31,6 +31,7 @@ SAMPLE_CAM = WinterCAM(os.path.join(TEST_DIR, 'sample_CAM4.nc'))
 VARIABLES_2D = ['PS']
 VARIABLES_3D = ['U']
 VARIABLES_3Dto1D = ['U_1D']
+VARIABLES_HARDCODE = ['THETA_hc'] # also LWP_hc, but SAMPLE_CAM is missing required variable 'Q'
 CAM_OUTPUT_CADENCE = 3 # hours
 
 #####################################
@@ -47,6 +48,7 @@ CAT_3D_NEAREST_ASC = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER
 
 # Outputs
 #    correspond to traj 1, age = -3 and age = 0 of SAMPLE_TRAJ
+#    unless specified, assume ASCENDING_PRESSURES
 PSURF_NEAREST = np.array([98434.875, 98783.21])
 PSURF_LINEAR = np.array([98447.28329206, 98692.00421007])
 UWIND_NEAREST_ASC = np.array([
@@ -61,6 +63,8 @@ UWIND_LINEAR_ASC = np.array([
 UWIND_LINEAR_DES = np.flip(UWIND_LINEAR_ASC, axis=1)
 UWIND_NEAREST_3DTO1D = np.array([8.52498717, 7.20642263])
 UWIND_LINEAR_3DTO1D = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
+THETA_NEAREST = np.array([254.55040291, 253.96924332])
+THETA_LINEAR = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
 
 #####################################
 ##  TESTS: ClimateAlongTrajectory  ##
@@ -70,6 +74,16 @@ def test_bad_CAM_variable_name():
     bad_variable_name = VARIABLES_2D + ['NULL']
     for good_method in VALID_INTERP_METHODS:
         assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, bad_variable_name, good_method)
+
+def test_missing_CAM_variable_to1D():
+    missing_variable = VARIABLES_3D + ['CLOUD_1D']
+    for good_method in VALID_INTERP_METHODS:
+        assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, missing_variable, good_method, DESCENDING_PRESSURES)
+
+def test_missing_CAM_variable_hardcode():
+    missing_variable = VARIABLES_3D + ['LWP_hc']
+    for good_method in VALID_INTERP_METHODS:
+        assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, missing_variable, good_method, DESCENDING_PRESSURES)
 
 def test_bad_CAM_variable_dims():
     bad_variable_dim = VARIABLES_2D + ['P0']
@@ -90,6 +104,13 @@ def test_no_plevels_on_add():
 def test_no_plevels_on_setup_pinterp():
     assert_raises(NameError, CAT_2D_NEAREST.setup_pinterp, None)
 
+def test_invalid_variable_prefix():
+    invalid_prefix = 'NULL_1D'
+    assert_raises(ValueError, CAT_2D_NEAREST.add_variable, invalid_prefix)
+
+def test_invalid_variable_suffix():
+    invalid_suffix = 'OMEGA_null'
+    assert_raises(ValueError, CAT_2D_NEAREST.add_variable, invalid_suffix)
 
 # Value check: 2-D variables
 def test_2Dvar_values_nearest():
@@ -137,6 +158,20 @@ def test_3Dto1D_values_linear():
     cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3Dto1D, traj_interp_method, ASCENDING_PRESSURES)
     uwind_along_traj = cat.data['U_1D']
     assert_allclose(uwind_along_traj.values, UWIND_LINEAR_3DTO1D)
+
+
+# Value check: hard-coded variables (THETA: potential temperature)
+def test_THETA_values_nearest():
+    traj_interp_method = 'nearest'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
+    theta_along_traj = cat.data['THETA']
+    assert_allclose(theta_along_traj.values, THETA_NEAREST)
+
+def test_THETA_values_linear():
+    traj_interp_method = 'linear'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
+    theta_along_traj = cat.data['THETA']
+    assert_allclose(theta_along_traj.values, THETA_LINEAR)
 
 
 # Check attributes
