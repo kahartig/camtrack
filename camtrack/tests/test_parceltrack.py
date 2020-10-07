@@ -30,6 +30,7 @@ TRAJ_NUMBER = 1
 SAMPLE_CAM = WinterCAM(os.path.join(TEST_DIR, 'sample_CAM4.nc'))
 VARIABLES_2D = ['PS']
 VARIABLES_3D = ['U']
+VARIABLES_3Dto1D = ['U_1D']
 CAM_OUTPUT_CADENCE = 3 # hours
 
 #####################################
@@ -127,15 +128,13 @@ def test_3Dvar_values_linear_descending():
 # Value check: 3-D -> 1-D variables
 def test_3Dto1D_values_nearest():
     traj_interp_method = 'nearest'
-    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3D, traj_interp_method, ASCENDING_PRESSURES)
-    cat.add_variable('U', True)
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3Dto1D, traj_interp_method, ASCENDING_PRESSURES)
     uwind_along_traj = cat.data['U_1D']
     assert_allclose(uwind_along_traj.values, UWIND_NEAREST_3DTO1D)
 
-def test_3Dto1D_values_nearest():
+def test_3Dto1D_values_linear():
     traj_interp_method = 'linear'
-    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3D, traj_interp_method, ASCENDING_PRESSURES)
-    cat.add_variable('U', True)
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_3Dto1D, traj_interp_method, ASCENDING_PRESSURES)
     uwind_along_traj = cat.data['U_1D']
     assert_allclose(uwind_along_traj.values, UWIND_LINEAR_3DTO1D)
 
