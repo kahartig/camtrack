@@ -245,16 +245,20 @@ class ClimateAlongTrajectory:
                 along_traj = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 along_traj_nan0 = along_traj.where(~np.isnan(along_traj.values), other=0.) # convert NaN to 0 so they don't contribute to integral
                 values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
-                values.name = 'LWP'
-                variable_name = 'LWP'
+                values.name = variable_key
+                values.units = 'kg/m2'
+                values.long_name = 'Liquid water path (integral(Q dp/g))'
+                variable_name = variable_key
             elif hardcoded and (prefix == 'THETA'):
                 p_0 = 1e5 # reference pressure 1,000 hPa
                 kappa = 2./7. # Poisson constant
                 T_values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 p_values = self.traj_pres
                 values = T_values * (p_0 / p_values)**kappa
-                values.name = 'THETA'
-                variable_name = 'THETA'
+                values.name = variable_key
+                values.units = 'K'
+                values.long_name = 'Potential temperature'
+                variable_name = variable_key
             else:
                 values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
                 variable_name = variable

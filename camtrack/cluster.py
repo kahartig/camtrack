@@ -227,16 +227,13 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
         trajectory file names and their assigned cluster number
     cam_variables: list-like of strings
         list of CAM variables to plot
-        must correpond to 2-D variables with dimensions (time, lat, lon)
+        Must correpond to 2-D variables with dimensions (time, lat, lon)
+        OR be 3-D -> 1-D interpolations, in which case pressure_levels must be
+        provided
     other_variables: list-like of strings
-        list of non-CAM variables to plot
-        includes custom variables and HYSPLIT diagnostic output variables
+        list of custom variables and HYSPLIT diagnostic output variables to plot
         supported custom variables:
             'Net cloud forcing'
-            'LWP'
-            '<3D>_1D' where <3D> is the variable name of some 3-D variable to
-                interpolate directly onto the trajectory path
-                Must provide pressure_levels
         HYSPLIT diagnostic output variables:
             'HEIGHT' is always available
             other diagnostic output variables are only available if
@@ -263,6 +260,7 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
     '''
     var_to_plot = cam_variables + other_variables
     num_plots = len(var_to_plot)
+    plt.rcParams.update({'font.size': 14})  # set overall font size
 
     # Retrieve total number of clusters from CLUSLIST file name
     cluslist_path, cluslist_filename = os.path.split(cluslist)
@@ -289,7 +287,7 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
             traj_name = shifted_traj_name.replace(shifted_prefix, '') # strip prefix from traj file name
             trajfile = ct.TrajectoryFile(os.path.join(traj_dir, traj_name))
             camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
-            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
+            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
             cluster_cats.append(cat)
             cluster_names.append(traj_name)
             cluster_ages.append(cat.trajectory.index.values)
@@ -309,26 +307,6 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
                 sample_data = ev.data['LWCF']
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title('LWCF + SWCF: Net cloud forcing')
-            elif variable[-3:] == '_1D':
-                variable_key = variable[:-3]
-                for ev_idx, ev in enumerate(cluster_cats):
-                    time = cluster_ages[ev_idx]
-                    ev.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
-                    plot_data = ev.data[variable].values
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
-                    sum_all_events[ev_idx, -len(time):] = plot_data
-                sample_data = ev.data[variable]
-                axs[var_idx].set_ylabel(sample_data.units)
-                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
-            elif variable == 'LWP':
-                for ev_idx, ev in enumerate(cluster_cats):
-                    time = cluster_ages[ev_idx]
-                    ev.add_variable(variable, pressure_levels=pressure_levels)
-                    plot_data = ev.data[variable].values
-                    sum_all_events[ev_idx, -len(time):] = plot_data
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
-                axs[var_idx].set_ylabel('kg/m^2')
-                axs[var_idx].set_title('LWP: Liquid water path (integral of Q)')
             else:
                 for ev_idx, ev in enumerate(cluster_cats):
                     time = cluster_ages[ev_idx]

@@ -284,9 +284,7 @@ def trajectory_path_with_wind(trajectory_paths, traj_number, cam_dir, case_name,
         # Interpolate wind onto path
         winter_file = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         pressure_levels = np.linspace(1.2e5, 300, 40)
-        cat = ct.ClimateAlongTrajectory(winter_file, trajfile, traj_number, ['TREFHT'], 'linear')
-        cat.add_variable('U', True, pressure_levels)
-        cat.add_variable('V', True)
+        cat = ct.ClimateAlongTrajectory(winter_file, trajfile, traj_number, ['U_1D', 'V_1D'], 'linear', pressure_levels)
         lats = cat.data['lat'].values
         lons = cat.data['lon'].values
         u_wind = cat.data['U_1D'].values
@@ -399,10 +397,11 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             all plots will be saved at designated save file locations
     cam_variables: list-like of strings
         list of CAM variables to plot
-        must correpond to 2-D variables with dimensions (time, lat, lon)
+        Must correpond to 2-D variables with dimensions (time, lat, lon)
+        OR be 3-D -> 1-D interpolations, in which case pressure_levels must be
+        provided
     other_variables: list-like of strings
-        list of non-CAM variables to plot
-        includes custom variables and HYSPLIT diagnostic output variables
+        list of custom variables and HYSPLIT diagnostic output variables to plot
         supported custom variables:
             'Net cloud forcing'
         HYSPLIT diagnostic output variables:
@@ -458,7 +457,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
         camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         for traj_idx,df in trajfile.data.groupby(level=0):
             print('  Loading trajectory {}...'.format(traj_idx))
-            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method))
+            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method, pressure_levels))
 
         # Set up coloring by height
         n_heights = len(trajfile.traj_start['height'])
@@ -474,17 +473,11 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
                     time = traj.trajectory.index.values
                     axs[var_idx].plot(time, traj.data['LWCF'].values + traj.data['SWCF'].values, '-o', linewidth=2, c=c_height[traj_idx])
             else:
-                if variable[-3:] == '_1D':
-                    variable_key = variable[:-3]
-                    sample_data = camfile.variable(variable_key)
-                else:
-                    sample_data = all_trajectories[0].data[variable]
+                sample_data = all_trajectories[0].data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
                 for traj_idx,traj in enumerate(all_trajectories):
                     time = traj.trajectory.index.values
-                    if variable[-3:] == '_1D':
-                        traj.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
                     axs[var_idx].plot(time, traj.data[variable].values, '-o', linewidth=2, c=c_height[traj_idx])
         plt.tight_layout(h_pad=2.0)
         if saving:
@@ -519,13 +512,13 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
             dict mapping trajectory numbers to save file paths
     cam_variables: list-like of strings
         list of CAM variables to plot
-        must correpond to 2-D variables with dimensions (time, lat, lon)
+        Must correpond to 2-D variables with dimensions (time, lat, lon)
+        OR be 3-D -> 1-D interpolations, in which case pressure_levels must be
+        provided
     other_variables: list-like of strings
-        list of non-CAM variables to plot
-        includes custom variables and HYSPLIT diagnostic output variables
+        list of custom variables and HYSPLIT diagnostic output variables to plot
         supported custom variables:
             'Net cloud forcing'
-            'LWP'
         HYSPLIT diagnostic output variables:
             'HEIGHT' is always available
             other diagnostic output variables are only available if
@@ -578,7 +571,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         for traj_path in trajectory_list:
             trajfile = ct.TrajectoryFile(traj_path)
             camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
-            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
+            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
             all_events.append(cat)
             all_ages.append(cat.trajectory.index.values)
         max_age = max(len(age) for age in all_ages)
@@ -595,26 +588,6 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
                 for ev_idx, ev in enumerate(all_events):
                     time = all_ages[ev_idx]
                     plot_data = ev.data['LWCF'].values + ev.data['SWCF'].values
-                    sum_all_events[ev_idx, -len(time):] = plot_data
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
-            elif variable[-3:] == '_1D':
-                variable_key = variable[:-3]
-                for ev_idx, ev in enumerate(all_events):
-                    time = all_ages[ev_idx]
-                    ev.add_variable(variable_key, to_1D=True, pressure_levels=pressure_levels)
-                    plot_data = ev.data[variable].values
-                    sum_all_events[ev_idx, -len(time):] = plot_data
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
-                sample_data = ev.data[variable]
-                axs[var_idx].set_ylabel(sample_data.units)
-                axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
-            elif variable == 'LWP':
-                axs[var_idx].set_ylabel('kg/m^2')
-                axs[var_idx].set_title('Liquid water path (integral of Q)')
-                for ev_idx, ev in enumerate(all_events):
-                    time = all_ages[ev_idx]
-                    ev.add_variable(variable, pressure_levels=pressure_levels)
-                    plot_data = ev.data[variable].values
                     sum_all_events[ev_idx, -len(time):] = plot_data
                     axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='lightsteelblue')
             else:
@@ -664,7 +637,7 @@ def contour_plots(trajectory_paths, traj_number, cam_variables, pressure_levels,
         specifies which trajectory to plot from each event
     cam_variables: list-like of strings
         list of CAM variables to plot
-        must correpond to 2-D variables with dimensions (time, lat, lon)
+        must correpond to 3-D variables with dimensions (time, lev, lat, lon)
     pressure_levels: array-like of floats
         list of pressures, in Pa, to interpolate onto. Note that the length of
         pressure_levels should be at least equal to the number of hybrid levels
