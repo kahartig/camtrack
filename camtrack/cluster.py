@@ -260,7 +260,6 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
     '''
     var_to_plot = cam_variables + other_variables
     num_plots = len(var_to_plot)
-    plt.rcParams.update({'font.size': 14})  # set overall font size
 
     # Retrieve total number of clusters from CLUSLIST file name
     cluslist_path, cluslist_filename = os.path.split(cluslist)
@@ -281,7 +280,6 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
 
         # Load all trajectories in cluster
         cluster_cats = []
-        cluster_names = []
         cluster_ages = []
         for shifted_traj_name in clusters.loc[clusters['cluster'] == cluster_number]['traj file']:
             traj_name = shifted_traj_name.replace(shifted_prefix, '') # strip prefix from traj file name
@@ -289,7 +287,6 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
             camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
             cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
             cluster_cats.append(cat)
-            cluster_names.append(traj_name)
             cluster_ages.append(cat.trajectory.index.values)
         max_age = max(len(age) for age in cluster_ages)
 
@@ -302,7 +299,7 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
                 for ev_idx, ev in enumerate(cluster_cats):
                     time = cluster_ages[ev_idx]
                     plot_data = ev.data['LWCF'].values + ev.data['SWCF'].values
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='mediumseagreen')
                     sum_all_events[ev_idx, -len(time):] = plot_data
                 sample_data = ev.data['LWCF']
                 axs[var_idx].set_ylabel(sample_data.units)
@@ -311,21 +308,19 @@ def cluster_line_plots(cluslist, cam_variables, other_variables, traj_interp_met
                 for ev_idx, ev in enumerate(cluster_cats):
                     time = cluster_ages[ev_idx]
                     plot_data = ev.data[variable].values
-                    axs[var_idx].plot(time, plot_data, '-', linewidth=2., label=cluster_names[ev_idx])
+                    axs[var_idx].plot(time, plot_data, '-', linewidth=0.5, c='mediumseagreen')
                     sum_all_events[ev_idx, -len(time):] = plot_data
                 sample_data = ev.data[variable]
                 axs[var_idx].set_ylabel(sample_data.units)
                 axs[var_idx].set_title(variable + ': ' + sample_data.long_name)
             avg_all_events = sum_all_events.mean(axis=0)
-            axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '--', linewidth=3., c='black', label='mean of cluster')
+            axs[var_idx].plot(max(cluster_ages, key=len), avg_all_events, '-', linewidth=2., c='darkgreen', label='mean of cluster')
 
-        handles, labels = axs[-1].get_legend_handles_labels()
-        legend = fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1, 0.5))
         plt.tight_layout(h_pad=2.0)
         if save_dir is None:
             plt.show()
         else:
             save_file_path = os.path.join(save_dir, 'cluster{}_line_plots.png'.format(cluster_number))
-            fig.savefig(save_file_path, bbox_extra_artists=[legend,], bbox_inches='tight')
+            fig.savefig(save_file_path)
             print('Finished saving line plots for cluster {}...'.format(cluster_number))
         plt.close()
