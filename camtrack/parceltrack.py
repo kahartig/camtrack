@@ -37,6 +37,8 @@ class ClimateAlongTrajectory:
         interpolate a new variable along trajectory path and add to self.data
     setup_pinterp
         one-time set up of interpolation onto pressure levels
+    check_variable_exists
+        raise error if a required variable does not exist in WinterCAM instance
 
     Attributes
     ----------
@@ -90,8 +92,8 @@ class ClimateAlongTrajectory:
             of special variables:
                 ends in '_1D': 3-D+time variable to be interpolated directly
                     onto trajectory path
-                ends in '_hc': variable with special handling that has been
-                    hard-coded in camtrack. Available options:
+                ends in '_hc': hard-coded variable with special handling
+                    Available options:
                     'LWP_hc': liquid water path (vertical integral of 'Q')
                     'THETA_hc': potential temperature
         traj_interpolation: 'nearest' or 'linear'
@@ -156,40 +158,32 @@ class ClimateAlongTrajectory:
         Interpolate a new variable onto trajectory path
 
         The new variable is automatically added to self.data
-        If the variable is 3-D + time (time, lev, lat, lon), there are two
-        interpolation options:
-            if to_1D=False, retrieve full air column along trajectory path
-                output dimensions are (time, pres)
-            if to_1D=True, also interpolate onto the trajectory pressure
-                output dimensions are (time)
-
-        Special treatment for liquid water path:
-            if variable='LWP', return vertical integral of Q along trajectory
+        For 3-D+time variables:
+            to interpolate onto time, lat, and lon but retain entire vertical
+              column, provide variable name e.g. 'OMEGA'
+            to interpolate onto pressure as well as time, lat, and lon
+              (collapse vertical dimension), add '_1D' to end of variable name
+              e.g. 'OMEGA_1D'
 
         Parameters
         ----------
         variable: string
             name of variable to be interpolated onto trajectory path
-        to_1D: boolean
-            determines whether a 3-D+time variable is interpolated onto
-            trajectory height/pressure as well as latitude and longitude
-            If False:
-                retrieve full air column along trajectory path
-                For 2-D+time variables, output dimensions are (time)
-                For 3-D+time variables, output dimensions are (time, pres)
-            If True and variable has dimensions (time, lev, lat, lon):
-                interpolate onto pressure as well as the usual time, lat, lon of
-                trajectory path
-                Output dimensions are (time)
-            Default is False
+            Must be a CAM variable name (field in all caps) OR one of two types
+            of special variables:
+                ends in '_1D': 3-D+time variable to be interpolated directly
+                    onto trajectory path, e.g. 'T_1D' or 'OMEGA_1D'
+                ends in '_hc': hard-coded variable with special handling
+                    Available options:
+                        'LWP_hc': liquid water path (vertical integral of 'Q')
+                        'THETA_hc': potential temperature
         pressure_levels: array-like
             pressure levels, in Pa, to interpolate onto, if a 3-D+time variable
             is requested
             Set to None if variable is 2-D+time
-            Only required if no 3-D+time variables and pressure levels were
-            provided on init
-            If pressure levels were provided on init, those values will be used
-            instead
+            If self.pressure_levels already exists (for example, was set during
+            init), the pressure_levels argument is ignored and the existing
+            attribute used instead
             Default is None
         '''
         # Check if required variables are present in CAM file
@@ -296,7 +290,7 @@ class ClimateAlongTrajectory:
         in WinterCAM file
 
         If variable_key corresponds to a hard-coded variable, check that the
-        variables required to calculate variable_key are present in WinterCAM
+        variable(s) required to calculate variable_key are present in WinterCAM
 
         Parameters
         ----------
