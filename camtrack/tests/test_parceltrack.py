@@ -69,22 +69,7 @@ THETA_LINEAR = np.array([np.nan, np.nan]) # traj path is between two pressure le
 #####################################
 ##  TESTS: ClimateAlongTrajectory  ##
 #####################################
-# Check for raised errors
-def test_bad_CAM_variable_name():
-    bad_variable_name = VARIABLES_2D + ['NULL']
-    for good_method in VALID_INTERP_METHODS:
-        assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, bad_variable_name, good_method)
-
-def test_missing_CAM_variable_to1D():
-    missing_variable = VARIABLES_3D + ['CLOUD_1D']
-    for good_method in VALID_INTERP_METHODS:
-        assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, missing_variable, good_method, DESCENDING_PRESSURES)
-
-def test_missing_CAM_variable_hardcode():
-    missing_variable = VARIABLES_3D + ['LWP_hc']
-    for good_method in VALID_INTERP_METHODS:
-        assert_raises(ValueError, ClimateAlongTrajectory, SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, missing_variable, good_method, DESCENDING_PRESSURES)
-
+# Raised errors: general
 def test_bad_CAM_variable_dims():
     bad_variable_dim = VARIABLES_2D + ['P0']
     for good_method in VALID_INTERP_METHODS:
@@ -111,6 +96,20 @@ def test_invalid_variable_prefix():
 def test_invalid_variable_suffix():
     invalid_suffix = 'OMEGA_null'
     assert_raises(ValueError, CAT_2D_NEAREST.add_variable, invalid_suffix)
+
+# Raised errors: variable exists in CAM files
+def test_missing_CAM_variable_name():
+    bad_variable_name = 'NULL'
+    assert_raises(ValueError, CAT_2D_NEAREST.check_variable_exists, bad_variable_name)
+
+def test_missing_CAM_variable_to1D():
+    missing_variable = 'CLOUD_1D'
+    assert_raises(ValueError, CAT_2D_NEAREST.check_variable_exists, missing_variable)
+
+def test_missing_CAM_variable_hardcode():
+    missing_variable = 'LWP_hc'
+    assert_raises(ValueError, CAT_2D_NEAREST.check_variable_exists, missing_variable)
+
 
 # Value check: 2-D variables
 def test_2Dvar_values_nearest():
@@ -194,15 +193,4 @@ def test_subset_contains_traj():
 def test_trajectory_attr():
     traj_everyXhours = SAMPLE_TRAJ.get_trajectory(TRAJ_NUMBER, CAM_OUTPUT_CADENCE)
     assert_frame_equal(CAT_2D_NEAREST.trajectory, traj_everyXhours)
-
-
-# Interpolation onto pressure levels
-def test_default_to_init_plevels():
-    traj_interp_method = 'nearest'
-    init_variable = ['V']
-    added_variable = 'U'
-    cat_ascending = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, init_variable, traj_interp_method, ASCENDING_PRESSURES)
-    cat_ascending.add_variable(added_variable, pressure_levels=DESCENDING_PRESSURES)
-    uwind_along_traj = cat_ascending.data[added_variable]
-    assert_allclose(uwind_along_traj.values, UWIND_NEAREST_ASC)
 
