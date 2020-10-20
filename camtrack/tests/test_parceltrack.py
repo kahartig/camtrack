@@ -63,8 +63,8 @@ UWIND_LINEAR_ASC = np.array([
 UWIND_LINEAR_DES = np.flip(UWIND_LINEAR_ASC, axis=1)
 UWIND_NEAREST_3DTO1D = np.array([8.52498717, 7.20642263])
 UWIND_LINEAR_3DTO1D = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
-THETA_NEAREST = np.array([254.55040291, 253.96924332])
-THETA_LINEAR = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
+THETA_NEAREST = np.array([254.01979658, 252.38071361])
+THETA_LINEAR = np.array([254.01979658, 252.38071361]) # uses AIR_TEMP instead of interpolating CAM data, so nearest and linear return the same result
 
 #####################################
 ##  TESTS: ClimateAlongTrajectory  ##
@@ -163,13 +163,13 @@ def test_3Dto1D_values_linear():
 def test_THETA_values_nearest():
     traj_interp_method = 'nearest'
     cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
-    theta_along_traj = cat.data['THETA']
+    theta_along_traj = cat.data['THETA_hc']
     assert_allclose(theta_along_traj.values, THETA_NEAREST)
 
 def test_THETA_values_linear():
     traj_interp_method = 'linear'
     cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
-    theta_along_traj = cat.data['THETA']
+    theta_along_traj = cat.data['THETA_hc']
     assert_allclose(theta_along_traj.values, THETA_LINEAR)
 
 
