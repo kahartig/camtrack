@@ -202,7 +202,7 @@ class ClimateAlongTrajectory:
                 if prefix == 'LWP':
                     variable = 'Q'
                 elif prefix == 'THETA':
-                    variable = 'T'
+                    variable = 'PS' # filler; unused
                 else:
                     raise ValueError('Invalid Variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
             else:
@@ -219,8 +219,18 @@ class ClimateAlongTrajectory:
 
         # Two-dimensional climate variables
         if variable_data.dims == ('time', 'lat', 'lon'):
-            values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-            variable_name = variable
+            if hardcoded and (prefix == 'THETA'):
+                p_0 = 1e5 # reference pressure 1,000 hPa
+                kappa = 2./7. # Poisson constant
+                T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
+                p_values = self.traj_pres
+                values = T_values * (p_0 / p_values)**kappa
+                values.name = variable_key
+                values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
+                variable_name = variable_key
+            else:
+                values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
+                variable_name = variable
 
         # Three-dimensional climate variables
         elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
@@ -241,15 +251,6 @@ class ClimateAlongTrajectory:
                 values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'kg/m2', 'long_name': 'Liquid water path (integral(Q dp/g))'})
-                variable_name = variable_key
-            elif hardcoded and (prefix == 'THETA'):
-                p_0 = 1e5 # reference pressure 1,000 hPa
-                kappa = 2./7. # Poisson constant
-                T_values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                p_values = self.traj_pres
-                values = T_values * (p_0 / p_values)**kappa
-                values.name = variable_key
-                values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
                 variable_name = variable_key
             else:
                 values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
@@ -296,7 +297,7 @@ class ClimateAlongTrajectory:
             variable name to be checked against self.winter_file data variables
         '''
         # Map hard-coded variable names to the CAM variables they require
-        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'T'}
+        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS'}
 
         # Standard CAM variable
         if '_' not in variable_key:
