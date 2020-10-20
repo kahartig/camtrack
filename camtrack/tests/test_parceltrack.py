@@ -31,7 +31,9 @@ SAMPLE_CAM = WinterCAM(os.path.join(TEST_DIR, 'sample_CAM4.nc'))
 VARIABLES_2D = ['PS']
 VARIABLES_3D = ['U']
 VARIABLES_3Dto1D = ['U_1D']
-VARIABLES_HARDCODE = ['THETA_hc'] # also LWP_hc, but SAMPLE_CAM is missing required variable 'Q'
+#VARIABLES_HARDCODE_LWP = ['LWP_hc'] # not testable because SAMPLE_CAM is missing required variable 'Q'
+VARIABLES_HARDCODE_THETA = ['THETA_hc']
+VARIABLES_HARDCODE_THETADEV = ['THETADEV_hc']
 CAM_OUTPUT_CADENCE = 3 # hours
 
 #####################################
@@ -65,6 +67,8 @@ UWIND_NEAREST_3DTO1D = np.array([8.52498717, 7.20642263])
 UWIND_LINEAR_3DTO1D = np.array([np.nan, np.nan]) # traj path is between two pressure levels: higher level ('nearest', 9.62e4) is filled, lower (9.97e4) is NaN
 THETA_NEAREST = np.array([254.01979658, 252.38071361])
 THETA_LINEAR = np.array([254.01979658, 252.38071361]) # uses AIR_TEMP instead of interpolating CAM data, so nearest and linear return the same result
+THETADEV_NEAREST = THETA_NEAREST - np.average(THETA_NEAREST)
+THETADEV_LINEAR = THETA_LINEAR - np.average(THETA_LINEAR)
 
 #####################################
 ##  TESTS: ClimateAlongTrajectory  ##
@@ -162,15 +166,28 @@ def test_3Dto1D_values_linear():
 # Value check: hard-coded variables (THETA: potential temperature)
 def test_THETA_values_nearest():
     traj_interp_method = 'nearest'
-    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE_THETA, traj_interp_method, ASCENDING_PRESSURES)
     theta_along_traj = cat.data['THETA_hc']
     assert_allclose(theta_along_traj.values, THETA_NEAREST)
 
 def test_THETA_values_linear():
     traj_interp_method = 'linear'
-    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE, traj_interp_method, ASCENDING_PRESSURES)
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE_THETA, traj_interp_method, ASCENDING_PRESSURES)
     theta_along_traj = cat.data['THETA_hc']
     assert_allclose(theta_along_traj.values, THETA_LINEAR)
+
+# Value check: hard-coded variables (THETADEV: potential temperature anomaly)
+def test_THETA_values_nearest():
+    traj_interp_method = 'nearest'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE_THETADEV, traj_interp_method, ASCENDING_PRESSURES)
+    theta_along_traj = cat.data['THETADEV_hc']
+    assert_allclose(theta_along_traj.values, THETADEV_NEAREST)
+
+def test_THETA_values_linear():
+    traj_interp_method = 'linear'
+    cat = ClimateAlongTrajectory(SAMPLE_CAM, SAMPLE_TRAJ, TRAJ_NUMBER, VARIABLES_HARDCODE_THETADEV, traj_interp_method, ASCENDING_PRESSURES)
+    theta_along_traj = cat.data['THETADEV_hc']
+    assert_allclose(theta_along_traj.values, THETADEV_LINEAR)
 
 
 # Check attributes

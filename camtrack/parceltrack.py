@@ -177,6 +177,8 @@ class ClimateAlongTrajectory:
                     Available options:
                         'LWP_hc': liquid water path (vertical integral of 'Q')
                         'THETA_hc': potential temperature
+                        'THETADEV_hc': potential temperature anomaly from
+                                       time-average
         pressure_levels: array-like
             pressure levels, in Pa, to interpolate onto, if a 3-D+time variable
             is requested
@@ -203,6 +205,8 @@ class ClimateAlongTrajectory:
                     variable = 'Q'
                 elif prefix == 'THETA':
                     variable = 'PS' # filler; unused
+                elif prefix == 'THETADEV':
+                    variable = 'PS' # filler; unused
                 else:
                     raise ValueError('Invalid Variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
             else:
@@ -227,6 +231,16 @@ class ClimateAlongTrajectory:
                 values = T_values * (p_0 / p_values)**kappa
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
+                variable_name = variable_key
+            elif hardcoded and (prefix == 'THETADEV'):
+                p_0 = 1e5 # reference pressure 1,000 hPa
+                kappa = 2./7. # Poisson constant
+                T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
+                p_values = self.traj_pres
+                values = T_values * (p_0 / p_values)**kappa
+                values = values - values.mean(dim='time')
+                values.name = variable_key
+                values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature anomaly from time-avg'})
                 variable_name = variable_key
             else:
                 values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
@@ -297,7 +311,9 @@ class ClimateAlongTrajectory:
             variable name to be checked against self.winter_file data variables
         '''
         # Map hard-coded variable names to the CAM variables they require
-        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS'}
+        #  note that THETA and THETADEV don't actually require PS, but including
+        #  check simplifies handling in add_variable
+        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS'}
 
         # Standard CAM variable
         if '_' not in variable_key:
