@@ -144,7 +144,14 @@ class ClimateAlongTrajectory:
         height_attrs = {'units': 'm above ground level', 'long_name': 'Parcel height above ground level'}
         diagnostic_variables.append(xr.DataArray(self.trajectory['height (m)'].values, name='HEIGHT', attrs=height_attrs, dims=('time'), coords=time_coord))
         for key in trajectories.diag_var_names:
-            key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
+            if key == 'PRESSURE':
+                key_attrs = {'units': 'Pa', 'long_name': 'pressure along trajectory (HYSPLIT)'}
+            elif key == 'AIR_TEMP':
+                key_attrs = {'units': 'K', 'long_name': 'air temperature from along trajectory (HYSPLIT)'}
+            elif key == 'TERR_MSL':
+                key_attrs = {'units': 'm', 'long_name': 'underlying terrain height relative to mean sea level'}
+            else:
+                key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
             diagnostic_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
         self.data = xr.merge(diagnostic_variables)        
 
