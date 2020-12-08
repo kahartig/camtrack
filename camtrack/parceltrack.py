@@ -300,7 +300,7 @@ class ClimateAlongTrajectory:
                         subset_lon = slice(point['lon'] - self.lon_pad, point['lon'] + self.lon_pad)
                     # Interpolate onto pressure level
                     raw_local_data = variable_at_time.sel(lat=subset_lat, lon=subset_lon).expand_dims({'time': time_array})
-                    local_data = cat.winter_file.interpolate(raw_local_data, pressure_array, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
+                    local_data = self.winter_file.interpolate(raw_local_data, pressure_array, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
                     variable_data = local_data.squeeze('time').squeeze('pres')
                     # Mask NaNs before interpolation
                     variable_masked = np.ma.masked_invalid(variable_data.values)
@@ -339,7 +339,7 @@ class ClimateAlongTrajectory:
         P0 = self.winter_file.variable('P0').item()
         hyam = self.winter_file.variable('hyam')
         hybm = self.winter_file.variable('hybm')
-        self.lowest_model_pressure = (hyam * P0 + hybm * cat.data['PS']).isel(lev=-1)
+        self.lowest_model_pressure = (hyam * P0 + hybm * self.data['PS']).isel(lev=-1)
 
         # Set arguments for Ngl.vinth2p
         self.pres_interpolation = self.traj_interpolation  # for Ngl.vinth2p; options=linear, log, log-log
