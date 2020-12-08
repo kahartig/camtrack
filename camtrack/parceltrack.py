@@ -293,7 +293,7 @@ class ClimateAlongTrajectory:
                 else:
                     # Lat/lon subset
                     subset_lat = slice(point['lat'] - self.lat_pad, point['lat'] + self.lat_pad)
-                    if (this_lon < self.lon_pad) or (this_lon > (360 - self.lon_pad)):
+                    if (point['lon'] < self.lon_pad) or (point['lon'] > (360 - self.lon_pad)):
                         # trajectory path crosses meridian -> include full longitude range
                         subset_lon = slice(0, 360)
                     else:
