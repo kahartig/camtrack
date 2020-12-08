@@ -19,6 +19,9 @@ import calendar
 # NCL/NGL imports
 import Ngl
 
+# Scipy imports
+from scipy.interpolate import griddata
+
 # Cartopy imports
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
