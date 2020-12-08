@@ -258,10 +258,10 @@ class ClimateAlongTrajectory:
                 values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation, kwargs={'bounds_error': True})
                 t_idx = t_idx + 1
             # Bundle into DataArray
-            xr.DataArray(values, name = variable,
-                dims=('time',),
-                coords={'time': self.traj_time, 'lat': self.traj_lat, 'lon': self.traj_lon},
-                attrs=raw_data.attrs)
+            values = xr.DataArray(values, name = variable,
+                                  dims=('time',),
+                                  coords={'time': self.traj_time, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                                  attrs=raw_data.attrs)
 
         # Three-dimensional climate variables
         elif raw_data.dims == ('time', 'lev', 'lat', 'lon'):
@@ -312,10 +312,10 @@ class ClimateAlongTrajectory:
                     values[t_idx] = griddata((x1, y1), variable_valid.ravel(), (point['lon'], point['lat']), method=self.traj_interpolation)
                 t_idx = t_idx + 1
             # Bundle into DataArray
-            xr.DataArray(values, name = variable,
-                dims=('time',),
-                coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
-                attrs=raw_data.attrs)
+            values = xr.DataArray(values, name = variable,
+                                  dims=('time',),
+                                  coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                                  attrs=raw_data.attrs)
 
         else:
             raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, variable_data.dims))
