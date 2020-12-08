@@ -628,11 +628,6 @@ class WinterCAM:
         p_0_mb = self.variable('P0').values.item()/100 # p0 must be in mb
         hyam = self.variable('hyam').values
         hybm = self.variable('hybm').values
-        if len(pressure_levels) < len(hyam):
-            print('WARNING:    The number of pressure levels given, {}, is less \
-                than the number of hybrid levels in the CAM data, {}. There may \
-                be unnecessary loss of information when interpolating to \
-                pressure levels as a result.'.format(len(pressure_levels), len(hyam)))
 
         # Set up interpolation arguments
         pressure_levels_mb = pressure_levels/100 # Ngl.vinth2p requires pressure levels in mb
