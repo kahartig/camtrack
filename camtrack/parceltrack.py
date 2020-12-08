@@ -75,7 +75,7 @@ class ClimateAlongTrajectory:
         trajectory path, or nearest-neighbor equivalent on CAM coordinates
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, pressure_levels=None):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation):
         '''
         Parameters
         ----------
@@ -126,18 +126,6 @@ class ClimateAlongTrajectory:
         self.traj_lat = xr.DataArray(self.trajectory['lat'].values, dims=('time'), coords=time_coord)
         self.traj_lon = xr.DataArray(self.trajectory['lon'].values, dims=('time'), coords=time_coord)
         self.traj_pres = xr.DataArray(self.trajectory['PRESSURE'].values, dims=('time'), coords=time_coord)
-
-        # Set up subset to trajectory path        
-        lat_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lat'))))
-        lon_pad = 1.5 * max(abs(np.diff(self.winter_file.variable('lon'))))
-        self.subset_lat = slice(min(self.traj_lat.values) - lat_pad, max(self.traj_lat.values) + lat_pad)
-        self.subset_time = slice(min(self.traj_time.values), max(self.traj_time.values))
-        #   special instructions for longitude because it is periodic:
-        if (any(self.traj_lon < 10)) and (any(self.traj_lon > 350)):
-            # trajectory path crosses meridian -> include full longitude range
-            self.subset_lon = slice(0, 360)
-        else:
-            self.subset_lon = slice(min(self.traj_lon.values) - lon_pad, max(self.traj_lon.values) + lon_pad)
         
         # Store height and diagnostic output variables
         diagnostic_variables = []
@@ -153,14 +141,17 @@ class ClimateAlongTrajectory:
             else:
                 key_attrs = {'units': 'unknown', 'long_name': key + ' from HYSPLIT diagnostic variables'}
             diagnostic_variables.append(xr.DataArray(self.trajectory[key].values, name=key, attrs=key_attrs, dims=('time'), coords=time_coord))
-        self.data = xr.merge(diagnostic_variables)        
+        self.data = xr.merge(diagnostic_variables)
+
+        # Status of setup for pressure interpolation
+        self.ready_pinterp = False
 
         # Store requested climate variables
         for key in variables:
-            self.add_variable(key, pressure_levels=pressure_levels)
+            self.add_variable(key)
 
 
-    def add_variable(self, variable_key, pressure_levels=None):
+    def add_variable(self, variable_key):
         '''
         Interpolate a new variable onto trajectory path
 
@@ -209,28 +200,24 @@ class ClimateAlongTrajectory:
             elif suffix == 'hc':
                 hardcoded = True
                 if prefix == 'LWP':
-                    variable = 'Q'
+                    #variable = 'Q'
+                    raise NotImplementedError('LWP no longer supported')
                 elif prefix == 'THETA':
                     variable = 'PS' # filler; unused
                 elif prefix == 'THETADEV':
                     variable = 'PS' # filler; unused
                 else:
-                    raise ValueError('Invalid Variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
+                    raise ValueError('Invalid variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
             else:
                 raise ValueError("Invalid suffix {} for variable key {}; must be '1D' or 'hc'".format(suffix, variable_key))
         else:
             variable = variable_key
-        raw_data = self.winter_file.variable(variable).sel(time=self.subset_time)
 
-        # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
-        if any(self.traj_lon.values > max(raw_data['lon'].values)):
-            variable_data = assist.roll_longitude(raw_data)
-        else:
-            variable_data = raw_data
+        # Load requested variable
+        raw_data = self.winter_file.variable(variable)
 
-        # Two-dimensional climate variables
-        if variable_data.dims == ('time', 'lat', 'lon'):
-            if hardcoded and (prefix == 'THETA'):
+        if hardcoded:
+            if prefix == 'THETA':
                 p_0 = 1e5 # reference pressure 1,000 hPa
                 kappa = 2./7. # Poisson constant
                 T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
@@ -239,7 +226,7 @@ class ClimateAlongTrajectory:
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
                 variable_name = variable_key
-            elif hardcoded and (prefix == 'THETADEV'):
+            elif prefix == 'THETADEV':
                 p_0 = 1e5 # reference pressure 1,000 hPa
                 kappa = 2./7. # Poisson constant
                 T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
@@ -249,33 +236,83 @@ class ClimateAlongTrajectory:
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature anomaly from time-avg'})
                 variable_name = variable_key
-            else:
-                values = variable_data.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                variable_name = variable
+
+        # Two-dimensional climate variables
+        elif raw_data.dims == ('time', 'lat', 'lon'):
+            variable_name = variable
+            values = np.zeros(len(self.trajectory))
+            
+            t_idx = 0
+            for age, point in self.trajectory.iterrows():
+                time = point['cftime date']
+                time_array = np.array([time, ])
+                variable_at_time = raw_data.sel(time=time)
+
+                # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
+                if point['lon'] > max(raw_data['lon'].values):
+                    variable_at_time = assist.roll_longitude(variable_at_time)
+                
+                values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation, kwargs={'bounds_error': True})
+                t_idx = t_idx + 1
+            # Bundle into DataArray
+            xr.DataArray(values, name = variable,
+                dims=('time',),
+                coords={'time': self.traj_time, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                attrs=raw_data.attrs)
 
         # Three-dimensional climate variables
-        elif variable_data.dims == ('time', 'lev', 'lat', 'lon'):
-            # Set up for vertical interpolation if it has never been done before
-            if not hasattr(self, 'pressure_levels'):
-                self.setup_pinterp(pressure_levels)
-            # Subset first to reduce interpolation time
-            subset = variable_data.sel(lat=self.subset_lat, lon=self.subset_lon)
-            da_on_pressure_levels = self.winter_file.interpolate(subset, self.pressure_levels, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
-            if to_1D:
-                # Interpolate onto trajectory pressure to collapse vertical dimension
-                values = da_on_pressure_levels.interp(time=self.traj_time, pres=self.traj_pres, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                variable_name = variable_key
-            elif hardcoded and (prefix == 'LWP'):
-                unit_conversion = 1/9.81 # LWP = Q*dp/g
-                along_traj = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                along_traj_nan0 = along_traj.where(~np.isnan(along_traj.values), other=0.) # convert NaN to 0 so they don't contribute to integral
-                values = unit_conversion * along_traj_nan0.sortby('pres').integrate('pres') # sortby pressure so that answer is positive definite
-                values.name = variable_key
-                values = values.assign_attrs({'units': 'kg/m2', 'long_name': 'Liquid water path (integral(Q dp/g))'})
-                variable_name = variable_key
-            else:
-                values = da_on_pressure_levels.interp(time=self.traj_time, lat=self.traj_lat, lon=self.traj_lon, method=self.traj_interpolation, kwargs={'bounds_error': True})
-                variable_name = variable
+        elif raw_data.dims == ('time', 'lev', 'lat', 'lon'):
+            if not to_1D:
+                raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add '_1D' to end of variable name and interpolate onto pressure as well")
+            
+            variable_name = variable
+            values = np.zeros(len(self.trajectory))
+            
+            t_idx = 0
+            for age, point in self.trajectory.iterrows():
+                time = point['cftime date']
+                time_array = np.array([time, ])
+                variable_at_time = raw_data.sel(time=time)
+
+                # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
+                if point['lon'] > max(raw_data['lon'].values):
+                    variable_at_time = assist.roll_longitude(variable_at_time)
+
+                # Set up for vertical interpolation if it has never been done before
+                if not self.ready_pinterp:
+                    self.setup_pinterp()
+
+                # Pressure level
+                pressure_array = np.array([point['PRESSURE'], ])
+                if point['PRESSURE'] > self.lowest_model_pressure.sel(time=time):
+                    # point is below lowest data level (higher pressure)
+                    values[t_idx] = np.nan
+                else:
+                    # Lat/lon subset
+                    subset_lat = slice(point['lat'] - self.lat_pad, point['lat'] + self.lat_pad)
+                    if (this_lon < self.lon_pad) or (this_lon > (360 - self.lon_pad)):
+                        # trajectory path crosses meridian -> include full longitude range
+                        subset_lon = slice(0, 360)
+                    else:
+                        subset_lon = slice(point['lon'] - self.lon_pad, point['lon'] + self.lon_pad)
+                    # Interpolate onto pressure level
+                    raw_local_data = variable_at_time.sel(lat=subset_lat, lon=subset_lon).expand_dims({'time': time_array})
+                    local_data = cat.winter_file.interpolate(raw_local_data, pressure_array, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
+                    variable_data = local_data.squeeze('time').squeeze('pres')
+                    # Mask NaNs before interpolation
+                    variable_masked = np.ma.masked_invalid(variable_data.values)
+                    xx, yy = np.meshgrid(variable_data.lon.values, variable_data.lat.values)
+                    x1 = xx[~variable_masked.mask]
+                    y1 = yy[~variable_masked.mask]
+                    variable_valid = variable_masked[~variable_masked.mask]
+                    # Interpolate onto traj lat/lon
+                    values[t_idx] = griddata((x1, y1), variable_valid.ravel(), (point['lon'], point['lat']), method=self.traj_interpolation)
+                t_idx = t_idx + 1
+            # Bundle into DataArray
+            xr.DataArray(values, name = variable,
+                dims=('time',),
+                coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                attrs=raw_data.attrs)
 
         else:
             raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, variable_data.dims))
@@ -283,27 +320,32 @@ class ClimateAlongTrajectory:
         # Update Dataset with new DataArray
         self.data[variable_name] = values
 
-    def setup_pinterp(self, pressure_levels):
+    def setup_pinterp(self):
         '''
         One-time setup of interpolation onto pressure levels
 
         If 3-D+time variables were not requested on init, this function will be
         called by add_variable the first time a 3-D+time variable is added
-
-        Parameters
-        ----------
-        pressure_levels: array-like
-            pressure levels, in Pa, to interpolate onto
         '''
-        if pressure_levels is not None:
-            self.pressure_levels = pressure_levels
-            #    inputs for vertical interpolation function
-            self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
-            self.pres_extrapolate = False  # for Ngl.vinth2p
-            self.fill_value = np.nan  # for winter_file.interpolate
-        else:
-            raise NameError('pressure_levels has not been defined, please provide an array of pressure values in Pa to interpolate 3-D variables onto')
+        # Subset pad in lat and lon
+        self.lat_pad = 7 * max(abs(np.diff(self.winter_file.variable('lat'))))
+        self.lon_pad = 7 * max(abs(np.diff(self.winter_file.variable('lon'))))
 
+        # Store pressure of surface and lowest model level
+        self.add_variable('PS') # always store surface pressure
+        P0 = self.winter_file.variable('P0').item()
+        hyam = self.winter_file.variable('hyam')
+        hybm = self.winter_file.variable('hybm')
+        self.lowest_model_pressure = (hyam * P0 + hybm * cat.data['PS']).isel(lev=-1)
+
+        # Set arguments for Ngl.vinth2p
+        self.pres_interpolation = self.traj_interpolation  # for Ngl.vinth2p; options=linear, log, log-log
+        self.pres_extrapolate = False  # for Ngl.vinth2p
+        self.fill_value = np.nan  # for winter_file.interpolate
+
+        # Store status: ready to interpolate in pressure
+        self.ready_pinterp = True
+        
     def check_variable_exists(self, variable_key):
         '''
         Raise error if CAM variable corresponding to variable_key does not exist
