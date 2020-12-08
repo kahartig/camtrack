@@ -342,7 +342,7 @@ class ClimateAlongTrajectory:
         self.lowest_model_pressure = (hyam * P0 + hybm * self.data['PS']).isel(lev=-1)
 
         # Set arguments for Ngl.vinth2p
-        self.pres_interpolation = self.traj_interpolation  # for Ngl.vinth2p; options=linear, log, log-log
+        self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
         self.pres_extrapolate = False  # for Ngl.vinth2p
         self.fill_value = np.nan  # for winter_file.interpolate
 
