@@ -481,8 +481,6 @@ class WinterCAM:
         retrieved directly from dataset
     dataset: xarray.Dataset
         contains all variables from CAM file(s) indicated in init
-        if trajectories or winter is not None, merges h1, h2, h3, and h4 files
-        into a single dataset
     '''
 
     def __init__(self, file_dir, trajectories=None, winter=None, case_name=None):
@@ -495,17 +493,17 @@ class WinterCAM:
             if trajectories is not None:
                 path to directory containing CAM files
                 assumes CAM file names within file_dir are in the format
-                case_name+'_YYYY_h?.nc' where e.g. YYYY=0910 for the 0009-0010 winter
+                case_name+'_YYYY_h1.nc' where e.g. YYYY=0910 for the 0009-0010 winter
         trajectories: TrajectoryFile instance
             if None, then use file_dir as full path of netCDF file to load
             if not None, must be a family of trajectories that start at the same
                 place and time. CAM files are loaded that correspond to the
                 year(s) associated with these trajectories
-            mutually exclusive with winter
+            Mutually exclusive with winter
         winter: string
-            indicates which winter to pull h1 through h4 files for
+            indicates which winter to pull files for
                 e.g. for 0009-0010 winter, winter='0910'
-            mutually exclusive with trajectories
+            Mutually exclusive with trajectories
         case_name: string
             case name of CESM run and prefix of .nc and .arl data files
         '''
@@ -525,27 +523,10 @@ class WinterCAM:
                 raise ValueError('Trajectories and winter arguments are mutually exclusive, only one or the other can be provided')
             # Read in h1, h2, h3, and h4 for the winter corresponding to trajectories
             if case_name is None:
-                raise ValueError("Must provide case_name to read in netCDF files of the form 'file_dir/case_name_YYYY_h?.nc'")
+                raise ValueError("Must provide case_name to read in netCDF files of the form 'file_dir/case_name_YYYY_h1.nc'")
             nc_file_path = os.path.join(
                 file_dir, case_name + '_' + winter_str + '_h1.nc')
-            ds1 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(
-                file_dir, case_name + '_' + winter_str + '_h2.nc')
-            ds2 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(
-                file_dir, case_name + '_' + winter_str + '_h3.nc')
-            ds3 = xr.open_dataset(nc_file_path)
-            nc_file_path = os.path.join(
-                file_dir, case_name + '_' + winter_str + '_h4.nc')
-            ds4 = xr.open_dataset(nc_file_path)
-
-            # Remove variables that should conflict between files before merging
-            dropped_vars = ['time_written', 'date_written']
-            ds1 = ds1.drop_vars(dropped_vars, errors='ignore')
-            ds2 = ds2.drop_vars(dropped_vars, errors='ignore')
-            ds3 = ds3.drop_vars(dropped_vars, errors='ignore')
-            ds4 = ds4.drop_vars(dropped_vars, errors='ignore')
-            dataset = xr.merge([ds1, ds2, ds3, ds4], join='exact')
+            dataset = xr.open_dataset(nc_file_path)
 
         # Add ordinal time coordinate
         # NOTE: time units are an assumption; cannot retrieve the units

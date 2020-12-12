@@ -27,7 +27,7 @@ outdatadir = '/n/tzipermanfs2/khartig/arctic_air_suppression/PI/ARL_winters/'
 case_name = 'pi_3h'
 
 # Function to convert from no-leap ordinal time to datetime.datetime timestamp
-# MeteoInfo's default method for this, sample_file.gettime(), assumes a Gregorian
+# MeteoInfo's default method for this, variable_file.gettime(), assumes a Gregorian
 # calendar with leap years because the datetime module does as well; must
 # convert CAM's no-leap ordinal times to year/month/day/hour format by hand
 import datetime
@@ -44,32 +44,11 @@ def custom_ord2date(ordinal_time):
     return datetime.datetime(year, month, day_of_month, hour)
 
 # Read the input netCDF data files
-#     variables are spread across 4 netCDF files
-#     dictionaries will be used to access the relevant file
-#     ASSUMES that all files (h1 thru h4) have same metadata (same time period, lat/lon, etc)
-name_to_h = dict.fromkeys(['CLDHGH', 'CLDICE', 'CLDLIQ', 'CLDLOW', 'CLDMED',
-                               'CLDTOT', 'CLOUD', 'CONCLD', 'FICE', 'ICIMR', 'ICLDIWP', 'ICLDTWP', 'ICWMR',
-                               'Q', 'QFLX', 'QREFHT', 'RELHUM', 'SFCLDICE', 'SFCLDLIQ', 'TGCLDCWP',
-                               'TGCLDIWP', 'TGCLDLWP', 'TMQ'], 'h1')
-name_to_h.update(dict.fromkeys(['FLDS', 'FLDSC', 'FLNS', 'FLNSC', 'FLNT',
-                                'FLNTC', 'FLUT', 'FLUTC', 'FSDS', 'FSDSC', 'FSDTOA', 'FSNS', 'FSNSC', 'FSNT',
-                                'FSNTC', 'FSNTOA', 'FSNTOAC', 'FSUTOA', 'LHFLX', 'LWCF', 'QRL', 'QRS', 'SHFLX',
-                                'SOLIN', 'SWCF'], 'h2'))
-name_to_h.update(dict.fromkeys(['OMEGA', 'OMEGAT', 'PBLH', 'PHIS', 'PRECC',
-                                'PRECL', 'PRECT', 'PS', 'PSL', 'SNOWHICE', 'SNOWHLND', 'TAUX', 'TAUY', 'U',
-                                'U10', 'UU', 'V', 'VQ', 'VT', 'VU', 'VV', 'Z3'], 'h3'))
-name_to_h.update(dict.fromkeys(['ICEFRAC', 'LANDFRAC', 'OCNFRAC', 'T', 'T200',
-                                'T500', 'T850', 'TREFHT', 'TREFHTMN', 'TREFHTMX', 'TS', 'TSMN', 'TSMX'], 'h4'))
-in_file_h1 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h1.nc'))
-in_file_h2 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h2.nc'))
-in_file_h3 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h3.nc'))
-in_file_h4 = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h4.nc'))
+variable_file = addfile(os.path.join(indatadir, case_name + '_' + winter_file + '_h1.nc'))
 print 'opened netcdf file(s)' 
-h_to_file = {'h1': in_file_h1, 'h2': in_file_h2, 'h3': in_file_h3, 'h4': in_file_h4}
 
 # Load file for sample data (variables shared across all files)
-sample_file = in_file_h3  # contains 3-D wind data
-sample_variable = sample_file['U']  # sample variable for calculating dimensions and levels
+sample_variable = variable_file['U']  # sample variable for calculating dimensions and levels
 
 # Touch the output file without writing to it:
 out_filename = os.path.join(outdatadir, case_name + '_' + winter_file + '.arl')
@@ -93,10 +72,10 @@ ny = sample_variable.dimlen(lat_index)  # latitude
 nz = sample_variable.dimlen(level_index)  # vertical level
 
 # convert vertical level coefficients to ECMWF-format levels
-hyam = sample_file['hyam'][:]
-hybm = sample_file['hybm'][:]
-P_0 = sample_file.read('P0').getFloat(0)  # retrieves value for P_0 from file object
-P_0_units = str(sample_file['P0'].attrvalue('units')[0])
+hyam = variable_file['hyam'][:]
+hybm = variable_file['hybm'][:]
+P_0 = variable_file.read('P0').getFloat(0)  # retrieves value for P_0 from file object
+P_0_units = str(variable_file['P0'].attrvalue('units')[0])
 if P_0_units != 'Pa':
 	raise ValueError("Reference pressure P0 is not in units of Pa. Change definition of 'levels' so that integer part 'a' is in hPa.")
 a = hyam[::-1] * P_0 / 100.0  # reverse index order to get surface -> TOA; factor of 100 to convert to hPa
@@ -104,7 +83,7 @@ b = hybm[::-1]  # reverse index order to get surface -> TOA; dimensionless, no n
 levels = [int(round(a[ind])) + b[ind] for ind in range(len(a))]
 
 # loop over times, append each to end of ARL file
-num_times = sample_file.timenum()
+num_times = variable_file.timenum()
 fhour = 0  # Offset for initial time; incremented for each timestamp
 for t in range(0, num_times):
     # Set temporary output ARL data file
@@ -118,11 +97,11 @@ for t in range(0, num_times):
     # Write ARL data file
     temp_file.setx(sample_variable.dimvalue(lon_index))
     temp_file.sety(sample_variable.dimvalue(lat_index))
-    timestamp = custom_ord2date(sample_file['time'][:][t])
+    timestamp = custom_ord2date(variable_file['time'][:][t])
     print 'Time stamp: ' + str(timestamp)
     # In getdatahead below, integer is "vertical coordinate system flag":
     #     1 (sigma fraction), 2 (pressure mb), 3 (terrain fraction), 4 (hybrid sigma-pressure)
-    data_header = temp_file.getdatahead(sample_file.proj, 'CAM4', 4, fhour)
+    data_header = temp_file.getdatahead(variable_file.proj, 'CAM4', 4, fhour)
     # modify data header grid parameter(s)
     #    for lat-lon grid, Pole Longitude must be maximum longitude value
     data_header.POLE_LON = max(sample_variable.dimvalue(lon_index))
@@ -135,7 +114,6 @@ for t in range(0, num_times):
     # Write 2-D Variables: surface pressure
     surface_data_record = []
     for camkey,arlkey in varmap_2d.items():
-        variable_file = h_to_file[name_to_h[camkey]]
         variable = variable_file[camkey][t, :, :] * unitmap_2d[camkey]
         single_data_record = temp_file.writedatarec(timestamp, 0, arlkey, fhour, 99, variable)  # write surface level (index 0)
         surface_data_record.append(single_data_record)
@@ -148,7 +126,6 @@ for t in range(0, num_times):
     for idx_lev in range(nz-1, -1, -1):
         level_data_record = []
         for camkey,arlkey in varmap_3d.items():
-            variable_file = h_to_file[name_to_h[camkey]]
             variable = variable_file[camkey][t, idx_lev, :, :] * unitmap_3d[camkey]
             single_data_record = temp_file.writedatarec(timestamp, nz - idx_lev, arlkey, fhour, 99, variable)
             level_data_record.append(single_data_record)
