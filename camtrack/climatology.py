@@ -20,9 +20,10 @@ import math
 from numpy import random
 
 
-def anomaly_DJF(data_list, method):
+def anomaly_DJF(data_list, method, anomaly_from='DJF'):
     """
-    Calculate the anomaly from the DJF mean of the yearly data in data_dict_list
+    Calculate the anomaly from the DJF mean or day of the year and time of day
+    of the yearly data in data_dict_list
 
     Parameters
     ----------
@@ -31,28 +32,65 @@ def anomaly_DJF(data_list, method):
         (time, lat, lon) data
     method: string
         must be either 'absolute' or 'scaled'
-        if 'absolute', output is data - DJF mean
-        if 'scaled', output is (data - DJF mean)/stdev
+        if 'absolute', output is data - mean
+        if 'scaled', output is (data - mean)/stdev
+    anomaly_from: string
+        must be either 'DJF' or 'dayofyear'
+        if 'DJF', anomaly is relative to the climatology over all
+        of DJF in the timeseries: the mean is defined for each lat/lon point
+        if 'dayofyear', anomaly is relative to the climatology for each day of
+        the year and time of day: the mean is defined for each
+        day-and-time-of-year/lat/lon point
 
     Returns
     -------
     diff_dict: dictionary
-        'diff': a (time, lat, lon) DataArray of anomalies from the DJF mean,
-            calculated according to 'method' argument. Arrays from each year of
-            the input have been concatenated along the time axis
-        'mean': a (lat, lon) DataArray of the DJF mean across all years provided
+        'diff': a (time, lat, lon) DataArray of anomalies from the DJF or
+            day-of-year mean, calculated according to 'method' argument. Arrays
+            from each year of the input have been concatenated along the time
+            axis
+        'mean': a (lat, lon) DataArray (of DJF mean) or (day-of-year, lat, lon)
+            DataArray (of day-of-year mean) across all years provided
     """
-    data_all_winters = xr.concat(data_list, dim='time')
-    mean_all_winters = data_all_winters.mean(dim='time')
-    stdev_all_winters = data_all_winters.std(dim='time')
-    if method == 'absolute':
-        difference = data_all_winters - mean_all_winters
-    elif method == 'scaled':
-        difference = (data_all_winters - mean_all_winters)/stdev_all_winters
+    if anomaly_from == 'DJF':
+        # average over all times to get a mean for each lat/lon point
+        data_all_winters = xr.concat(data_list, dim='time')
+        mean_all_winters = data_all_winters.mean(dim='time') # lat-lon
+        stdev_all_winters = data_all_winters.std(dim='time') # lat-lon
+        if method == 'absolute':
+            difference = data_all_winters - mean_all_winters
+        elif method == 'scaled':
+            difference = (data_all_winters - mean_all_winters)/stdev_all_winters
+        else:
+            raise ValueError("Method must be 'absolute' or 'scaled'")
+    elif anomaly_from == 'dayofyear':
+        # stack along a new 'winter' dimension, then average over 'winter' to
+        # get a mean for each day-of-year/lat/lon point
+        data_all_winters = np.stack(data_list)
+        mean_all_winters = data_all_winters.mean(axis=0) # time-lat-lon
+        stdev_all_winters = data_all_winters.std(axis=0) # time-lat-lon
+        difference_list = []
+        for data in data_list:
+            if method == 'absolute':
+                difference_list.append(data - mean_all_winters)
+            elif method == 'scaled':
+                difference_list.append((data - mean_all_winters)/stdev_all_winters)
+            else:
+                raise ValueError("Method must be 'absolute' or 'scaled'")
+        difference = xr.concat(difference_list, dim='time')
+        # construct mean_all_winters DataArray
+        sample_winter = data_list[0]
+        dayofyear_coord = {'dayofyear': [t.dayofyr + t.hour/24 for t in sample_winter.time.values]}
+        dayofyear_da = xr.DataArray(dayofyear_coord['dayofyear'], dims=('dayofyear'), coords=dayofyear_coord)
+        mean_all_winters = xr.DataArray(mean_all_winters,
+                                        dims=('dayofyear', 'lat', 'lon'),
+                                        coords={'dayofyear': dayofyear_da,
+                                                'lat': sample_winter.lat,
+                                                'lon': sample_winter.lon})
     else:
-        raise ValueError("Method must be 'absolute' or 'scaled'")
+        raise ValueError('Invalid anomaly_from {}. Must be either DJF or dayofyear.'.format(anomaly_from))
 
-    # make dictionary to hold mean and anomaly arrays
+    # Make dictionary to hold mean and anomaly arrays
     diff_dict = {'diff': difference, 'mean': mean_all_winters}
     return diff_dict
 
