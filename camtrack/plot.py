@@ -374,7 +374,7 @@ def trajectory_endpoints_plot(trajectory_list, save_file_path=None):
     plt.close()
 
 
-def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, case_name, pressure_levels=None):
+def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_interp_method, cam_dir, case_name):
     '''
     For each file in trajectory_paths, generate line plots of climate
     variables along all trajectories
@@ -415,12 +415,6 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
         path to directory where winter CAM files are stored
     case_name: string
         case name of CESM run and prefix of .nc and .arl data files
-    pressure_levels: array-like of floats
-        pressure levels, in Pa, to interpolate onto for variables with a
-        vertical level coordinate
-        Only used if requesting 3-D variables interpolated directly onto
-        trajectory path
-        Default is None
     '''
     # Parse input argument
     if isinstance(trajectory_paths, dict):
@@ -457,7 +451,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
         camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
         for traj_idx,df in trajfile.data.groupby(level=0):
             print('  Loading trajectory {}...'.format(traj_idx))
-            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method, pressure_levels))
+            all_trajectories.append(ct.ClimateAlongTrajectory(camfile, trajfile, traj_idx, cam_variables, traj_interp_method))
 
         # Set up coloring by height
         n_heights = len(trajfile.traj_start['height'])
@@ -489,7 +483,7 @@ def line_plots_by_event(trajectory_paths, cam_variables, other_variables, traj_i
             ax.clear()
     plt.close()
 
-def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, case_name, pressure_levels=None):
+def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other_variables, traj_interp_method, cam_dir, case_name):
     '''
     For each trajectory number in traj_numbers, generate line plots of
     climate variables across all events in trajectory_list.
@@ -513,8 +507,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
     cam_variables: list-like of strings
         list of CAM variables to plot
         Must correpond to 2-D variables with dimensions (time, lat, lon)
-        OR be 3-D -> 1-D interpolations, in which case pressure_levels must be
-        provided
+        OR be 3-D -> 1-D interpolations
     other_variables: list-like of strings
         list of custom variables and HYSPLIT diagnostic output variables to plot
         supported custom variables:
@@ -530,12 +523,6 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         path to directory where winter CAM files are stored
     case_name: string
         case name of CESM run and prefix of .nc and .arl data files
-    pressure_levels: array-like of floats
-        pressure levels, in Pa, to interpolate onto for variables with a
-        vertical level coordinate
-        Only used if requesting 3-D variables interpolated directly onto
-        trajectory path
-        Default is None
     '''
     # Parse input arguments
     if isinstance(traj_numbers, dict):
@@ -571,7 +558,7 @@ def line_plots_by_trajectory(trajectory_list, traj_numbers, cam_variables, other
         for traj_path in trajectory_list:
             trajfile = ct.TrajectoryFile(traj_path)
             camfile = ct.WinterCAM(cam_dir, trajfile, case_name=case_name)
-            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method, pressure_levels)
+            cat = ct.ClimateAlongTrajectory(camfile, trajfile, traj_number, cam_variables, traj_interp_method)
             all_events.append(cat)
             all_ages.append(cat.trajectory.index.values)
         max_age = max(len(age) for age in all_ages)
