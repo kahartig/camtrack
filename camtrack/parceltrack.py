@@ -268,7 +268,7 @@ class ClimateAlongTrajectory:
             if not to_1D:
                 raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add '_1D' to end of variable name and interpolate onto pressure as well")
             
-            variable_name = variable
+            variable_name = variable_key
             values = np.zeros(len(self.trajectory))
             
             t_idx = 0
@@ -312,7 +312,7 @@ class ClimateAlongTrajectory:
                     values[t_idx] = griddata((x1, y1), variable_valid.ravel(), (point['lon'], point['lat']), method=self.traj_interpolation)
                 t_idx = t_idx + 1
             # Bundle into DataArray
-            values = xr.DataArray(values, name = variable,
+            values = xr.DataArray(values, name = variable_name,
                                   dims=('time',),
                                   coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
                                   attrs=raw_data.attrs)
