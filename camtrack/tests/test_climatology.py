@@ -22,12 +22,14 @@ from camtrack.climatology import anomaly_DJF, sample_coldtail, find_coldest
 ##    Anomaly from DJF Details     ##
 #####################################
 # Inputs
+TIME_UNITS = 'days since 0001-01-01 00:00:00'
+TIME_CALENDAR = 'noleap'
 ANOMALY_VALUES_1 = np.arange(0, 8).reshape((2, 2, 2)).astype(float)
 ANOMALY_VALUES_1[0, 1, 1] = np.nan
 ANOMALY_VALUES_1[1, 1, 1] = np.nan
 ANOMALY_VALUES_2 = 2*ANOMALY_VALUES_1
-ANOMALY_TIME_1 = [0, 1.5]
-ANOMALY_TIME_2 = [10, 11.5]
+ANOMALY_TIME_1 = cftime.num2date([0, 1.5], TIME_UNITS, calendar=TIME_CALENDAR)
+ANOMALY_TIME_2 = cftime.num2date([0 + 365, 1.5 + 365], TIME_UNITS, calendar=TIME_CALENDAR)
 ANOMALY_LAT = [2, 4]
 ANOMALY_LON = [0, 2.5]
 ANOMALY_DATA_1 = xr.DataArray(ANOMALY_VALUES_1, [ ('time', ANOMALY_TIME_1), ('lat', ANOMALY_LAT), ('lon', ANOMALY_LON) ])
@@ -38,14 +40,17 @@ ANOMALY_MEAN = np.array([[3., 4.5], [6., np.nan]])
 ANOMALY_DIFF_ABSOLUTE = np.array([ [[-3., -3.5],[-4., np.nan]], [[1., 0.5],[0., np.nan]], [[-3., -2.5],[-2., np.nan]], [[5., 5.5],[6., np.nan]]])
 ANOMALY_STD = np.std(np.concatenate((ANOMALY_VALUES_1, ANOMALY_VALUES_2), axis=0), axis=0)
 ANOMALY_DIFF_SCALED = ANOMALY_DIFF_ABSOLUTE/ANOMALY_STD
+ANOMALY_DAYOFYEAR_MEAN = np.array([ [[0, 1.5],[3, np.nan]], [[6, 7.5],[9., np.nan]] ])
+ANOMALY_DIFF_DAYOFYEAR_ABSOLUTE = np.array([ [[ 0., -0.5], [-1.,  np.nan]], [[-2., -2.5], [-3.,  np.nan]], [[0., 0.5], [1., np.nan]], [[2., 2.5], [3., np.nan]]])
+# ANOMALY_DAYOFYEAR_STD = np.std(np.stack([ANOMALY_VALUES_1, ANOMALY_VALUES_2]), axis=0)
+# ANOMALY_DIFF_DAYOFYEAR_SCALED = np.array([anomalies/ANOMALY_DAYOFYEAR_STD for anomalies in ANOMALY_DIFF_DAYOFYEAR_ABSOLUTE])
 
 #####################################
 ##    Sample Coldtail Details      ##
 #####################################
 # Inputs
-TIME_UNITS = 'days since 0001-01-01 00:00:00'
-TIME_CALENDAR = 'noleap'
-SAMPLE_TIME = cftime.num2date(ANOMALY_TIME_1 + ANOMALY_TIME_2, TIME_UNITS, TIME_CALENDAR)
+SAMPLE_TIME = [*ANOMALY_TIME_1,  *ANOMALY_TIME_2] # concatenate the two time indices
+SAMPLE_TIME_ORDINAL = cftime.date2num(SAMPLE_TIME, TIME_UNITS, calendar=TIME_CALENDAR)
 SAMPLE_INPUT = {'diff': xr.DataArray(ANOMALY_DIFF_ABSOLUTE, [ ('time', SAMPLE_TIME), ('lat', ANOMALY_LAT), ('lon', ANOMALY_LON) ])}
 TOTAL_EVENTS = np.prod(ANOMALY_DIFF_ABSOLUTE.shape)
 SAMPLE_PERCENTILE_LOW = (0, 25)
@@ -67,9 +72,9 @@ SAMPLE_SINGLE_EVENT = {'time': 0, 'lat': 2, 'lon': 0, 'temp anomaly': -3.}  # lo
 #####################################
 # Inputs
 DISTINCT_LAX = {'delta t': 0, 'delta lat': 0, 'delta lon': 0}
-DISTINCT_TIME = {'delta t': 11, 'delta lat': 0.5, 'delta lon': 0.5} # strict in time, lax in space
+DISTINCT_TIME = {'delta t': 366, 'delta lat': 0.5, 'delta lon': 0.5} # strict in time, lax in space
 DISTINCT_SPACE = {'delta t': 1, 'delta lat': 3, 'delta lon': 3} # lax in space, strict in time
-DISTINCT_STRICT = {'delta t': 12, 'delta lat': 5, 'delta lon': 5}
+DISTINCT_STRICT = {'delta t': 370, 'delta lat': 5, 'delta lon': 5}
 FIND_NUM_EVENTS = 4
 
 # Outputs
@@ -82,29 +87,49 @@ FIND_STRICT_ANOMALIES = np.array([-4.])
 ##      TESTS: anomaly_DJF         ##
 #####################################
 
-# Absolute method: value - mean
-def test_absolute_method():
+# Absolute method relative to DJF: value - mean
+def test_absolute_method_DJF():
     input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
-    expected_time = ANOMALY_TIME_1 + ANOMALY_TIME_2
-    diff_dict = anomaly_DJF(input_list, 'absolute')
+    diff_dict = anomaly_DJF(input_list, 'absolute', 'DJF')
+    output_time_ordinal = cftime.date2num(diff_dict['diff'].time.values, TIME_UNITS, TIME_CALENDAR)
     assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_ABSOLUTE)
-    assert_allclose(diff_dict['diff'].time.values, expected_time)
+    assert_allclose(output_time_ordinal, SAMPLE_TIME_ORDINAL)
     assert_allclose(diff_dict['mean'].values, ANOMALY_MEAN)
 
-# Scaled method: (value - mean) / stdev
-def test_scaled_method():
+# Absolute method relative to day-of-year: value - mean
+def test_absolute_method_doy():
     input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
-    expected_time = ANOMALY_TIME_1 + ANOMALY_TIME_2
+    diff_dict = anomaly_DJF(input_list, 'absolute', 'dayofyear')
+    output_time_ordinal = cftime.date2num(diff_dict['diff'].time.values, TIME_UNITS, TIME_CALENDAR)
+    assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_DAYOFYEAR_ABSOLUTE)
+    assert_allclose(output_time_ordinal, SAMPLE_TIME_ORDINAL)
+    assert_allclose(diff_dict['mean'].values, ANOMALY_DAYOFYEAR_MEAN)
+
+# Scaled method relative to DJF: (value - mean) / stdev
+def test_scaled_method_DJF():
+    input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
     diff_dict = anomaly_DJF(input_list, 'scaled')
+    output_time_ordinal = cftime.date2num(diff_dict['diff'].time.values, TIME_UNITS, TIME_CALENDAR)
     assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_SCALED)
-    assert_allclose(diff_dict['diff'].time.values, expected_time)
+    assert_allclose(output_time_ordinal, SAMPLE_TIME_ORDINAL)
     assert_allclose(diff_dict['mean'].values, ANOMALY_MEAN)
+
+# # Scaled method relative to day-of-year: (value - mean) / stdev
+# def test_scaled_method_doy():
+#     input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
+#     diff_dict = anomaly_DJF(input_list, 'scaled')
+#     output_time_ordinal = cftime.date2num(diff_dict['diff'].time.values, TIME_UNITS, TIME_CALENDAR)
+#     assert_allclose(diff_dict['diff'].values, ANOMALY_DIFF_DAYOFYEAR_SCALED)
+#     assert_allclose(output_time_ordinal, SAMPLE_TIME_ORDINAL)
+#     assert_allclose(diff_dict['mean'].values, ANOMALY_DAYOFYEAR_MEAN)
 
 # Raised Errors
 def test_invalid_method():
     bad_method = 'null'
     input_list = [ANOMALY_DATA_1, ANOMALY_DATA_2]
     assert_raises(ValueError, anomaly_DJF, input_list, bad_method)
+
+
 
 # def test_different_lat():
 #     bad_dict_list = [SAMPLE_DICT_1, BAD_LAT_DICT]
