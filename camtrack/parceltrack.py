@@ -15,6 +15,7 @@ import pandas as pd
 import os
 import cftime
 import calendar
+import scipy # for qhull error
 
 # NCL/NGL imports
 import Ngl
