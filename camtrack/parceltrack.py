@@ -78,7 +78,7 @@ class ClimateAlongTrajectory:
         trajectory path, or nearest-neighbor equivalent on CAM coordinates
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, below_LML='NaN'):
         '''
         Parameters
         ----------
@@ -101,10 +101,12 @@ class ClimateAlongTrajectory:
                     'THETA_hc': potential temperature
         traj_interpolation: 'nearest' or 'linear'
             interpolation method for matching trajectory lat-lon to CAM variables
-        pressure_levels: array-like of floats
-            pressure levels, in Pa, to interpolate onto for variables with a vertical level coordinate
-            Not required if none of the variables have a vertical dimension
-            Default is None
+        below_LML: string
+            retrieval method for interpolation when trajectory is below lowest model level
+            if 'NaN': return np.nan
+            if 'LML': return value at lowest model level (above parcel)
+            Default is 'NaN'.
+
         '''
         # Store initial attributes
         self.winter_file = winter_file
@@ -151,10 +153,10 @@ class ClimateAlongTrajectory:
 
         # Store requested climate variables
         for key in variables:
-            self.add_variable(key)
+            self.add_variable(key, below_LML)
 
 
-    def add_variable(self, variable_key):
+    def add_variable(self, variable_key, below_LML='NaN'):
         '''
         Interpolate a new variable onto trajectory path
 
@@ -168,7 +170,7 @@ class ClimateAlongTrajectory:
 
         Parameters
         ----------
-        variable: string
+        variable_key: string
             name of variable to be interpolated onto trajectory path
             Must be a CAM variable name (field in all caps) OR one of two types
             of special variables:
@@ -180,14 +182,11 @@ class ClimateAlongTrajectory:
                         'THETA_hc': potential temperature
                         'THETADEV_hc': potential temperature anomaly from
                                        time-average
-        pressure_levels: array-like
-            pressure levels, in Pa, to interpolate onto, if a 3-D+time variable
-            is requested
-            Set to None if variable is 2-D+time
-            If self.pressure_levels already exists (for example, was set during
-            init), the pressure_levels argument is ignored and the existing
-            attribute used instead
-            Default is None
+        below_LML: string
+            retrieval method for interpolation when trajectory is below lowest model level
+            if 'NaN': return np.nan
+            if 'LML': return value at lowest model level (above parcel)
+            Default is 'NaN'.
         '''
         # Check if required variables are present in CAM file
         self.check_variable_exists(variable_key)
@@ -289,7 +288,12 @@ class ClimateAlongTrajectory:
                 pressure_array = np.array([point['PRESSURE'], ])
                 if point['PRESSURE'] > self.lowest_model_pressure.sel(time=time):
                     # point is below lowest data level (higher pressure)
-                    values[t_idx] = np.nan
+                    if below_LML == 'NaN':
+                        values[t_idx] = np.nan
+                    elif below_LML == 'LML':
+                        values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation).isel(lev=-1).values
+                    else:
+                        raise ValueError("Invalid retrieval method requested for trajectory points below lowest model level, below_LML={}. Must be 'NaN' or 'LML'".format(below_LML))
                 else:
                     try:
                         # Lat/lon subset
