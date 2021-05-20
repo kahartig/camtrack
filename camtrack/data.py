@@ -64,11 +64,6 @@ class TrajectoryFile:
         number of distinct trajectories stored in .traj file
     direction: string
         direction of trajectory calculation: 'FORWARD' or 'BACKWARD'
-    hit_ground: dict
-        trajectory number:boolean pairs indicating whether that trajectory
-        contained any NaN values
-            NOTE that hitting the ground does not always produce NaN values, so
-            hit_ground is a very conservative measure
     data: pandas DataFrame
         trajectory data every 3 hours
         uses a MultiIndex:
@@ -174,40 +169,22 @@ class TrajectoryFile:
         traj_columns = ['traj #', 'grid #', 'year', 'month', 'day', 'hour',
                         'minute', 'fhour', 'traj age', 'lat', 'lon', 'height (m)']
         traj_dtypes = {'traj #': int, 'grid #': int, 'year': int, 'month': int, 'day': int, 'hour': int,
-                       'minute': int, 'fhour': int, 'traj age': int, 'lat': str, 'lon': str, 'height (m)': str}
+                       'minute': int, 'fhour': int, 'traj age': int, 'lat': float, 'lon': float, 'height (m)': float}
         col_widths = [6, 6, 6, 6, 6, 6, 6, 6, 8, 9, 9, 9]
         for var in self.diag_var_names:
             col_widths.append(9)
             traj_columns.append(var)
-            traj_dtypes[var] = str
+            traj_dtypes[var] = float
 
         # read in file in fixed-width format
         trajectories = pd.read_fwf(filepath, widths=col_widths, names=traj_columns, dtype=traj_dtypes,
                            skiprows=traj_skiprow).set_index(['traj #', 'traj age'])
         trajectories.sort_index(inplace=True)
 
-        # if trajectories hit ground (starting with row of ***** or NaN):
-        #    identify row(s) where trajectory hits the ground
-        idx_grounded = trajectories[trajectories.lat == '*********'].index
-        #    replace values in grounded row with np.nan
-        float_columns = ['lat', 'lon', 'height (m)']
-        for var in self.diag_var_names:
-            float_columns.append(var)
-        #    for each column that should become a float, replace value with NaN
-        for col in float_columns:
-            trajectories.loc[idx_grounded, col] = np.nan
-            traj_dtypes[col] = float
         #    remove columns that have become indices before changing dtype
         del traj_dtypes['traj #']
         del traj_dtypes['traj age']
         trajectories = trajectories.astype(traj_dtypes)
-        #    store record of which trajectories have NaN values/become grounded
-        is_grounded = {}
-        for traj_idx in range(1, self.ntraj + 1):
-            is_grounded[traj_idx] = trajectories.loc[traj_idx].isnull().values.any()
-        self.hit_ground = is_grounded
-        # drop any rows with NaN (after trajectory becomes grounded)
-        trajectories = trajectories.dropna('index', 'any')
 
         # convert longitudes from -180 to 180 to 0 to 360 scale for consistency with CAM files
         trajectories['lon'].mask(trajectories['lon'] < 0, trajectories['lon'] + 360, inplace=True)
