@@ -307,7 +307,7 @@ class ClimateAlongTrajectory:
                                   attrs=raw_data.attrs)
 
         else:
-            raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, variable_data.dims))
+            raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, raw_data.dims))
         
         # Update Dataset with new DataArray
         self.data[variable_name] = values
