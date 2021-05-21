@@ -102,9 +102,9 @@ def test_traj_header():
 
 # Trajectory data
 def test_traj_data():
-    assert_equal(SAMPLE_TRAJ.data_1h.loc[1].loc[0]['PRESSURE'], TRAJ1_PRESSURE1)
-    assert_equal(SAMPLE_TRAJ.data_1h.loc[2].loc[-2]['height (m)'], TRAJ2_HEIGHT3)
-    assert_equal(SAMPLE_TRAJ.data_1h.loc[2].loc[-3]['lat'], TRAJ2_LAT4)
+    assert_allclose(SAMPLE_TRAJ.data_1h.loc[1].loc[0]['PRESSURE'], TRAJ1_PRESSURE1, atol=1)
+    assert_allclose(SAMPLE_TRAJ.data_1h.loc[2].loc[-2]['height (m)'], TRAJ2_HEIGHT3, atol=0.1)
+    assert_allclose(SAMPLE_TRAJ.data_1h.loc[2].loc[-3]['lat'], TRAJ2_LAT4, atol=0.001)
 
 # Get trajectory method
 def test_traj_get_both():
