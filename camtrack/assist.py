@@ -75,3 +75,20 @@ def set_fontsize(titles=24, labels=20, legend=20, other=16):
     plt.rc('ytick', labelsize=other)    # fontsize of the tick labels
     plt.rc('legend', fontsize=legend)    # legend fontsize
     plt.rc('figure', titlesize=titles)   # fontsize of the figure title
+
+def circular_boundary(ax):
+    '''
+    Set a circular outer boundary on a matplotlib plot axis
+
+    Useful when making North or South Polar Stereo projection plots with cartopy
+
+    Parameters
+    ----------
+    ax: GeoAxesSubplot
+        axis instance to which a circular boundary will be applied
+    '''
+    theta = np.linspace(0, 2 * np.pi, 100)
+    center, radius = [0.5, 0.5], 0.5
+    verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+    circle = mpath.Path(verts * radius + center)
+    ax.set_boundary(circle, transform=ax.transAxes)
