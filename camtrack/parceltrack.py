@@ -248,7 +248,6 @@ class ClimateAlongTrajectory:
             t_idx = 0
             for age, point in self.trajectory.iterrows():
                 time = point['cftime date']
-                time_array = np.array([time, ])
                 variable_at_time = raw_data.sel(time=time)
 
                 # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
@@ -274,7 +273,6 @@ class ClimateAlongTrajectory:
             t_idx = 0
             for age, point in self.trajectory.iterrows():
                 time = point['cftime date']
-                time_array = np.array([time, ])
                 variable_at_time = raw_data.sel(time=time)
 
                 # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
@@ -285,8 +283,6 @@ class ClimateAlongTrajectory:
                 if not self.ready_pinterp:
                     self.setup_pinterp()
 
-                # Pressure level
-                pressure_array = np.array([point['PRESSURE'], ])
                 if point['PRESSURE'] > self.lowest_model_pressure.sel(time=time):
                     # point is below lowest data level (higher pressure)
                     if below_LML == 'NaN':
@@ -296,47 +292,13 @@ class ClimateAlongTrajectory:
                     else:
                         raise ValueError("Invalid retrieval method requested for trajectory points below lowest model level, below_LML={}. Must be 'NaN' or 'LML'".format(below_LML))
                 else:
-                    try:
-                        # Lat/lon subset
-                        subset_lat = slice(point['lat'] - self.lat_pad, point['lat'] + self.lat_pad)
-                        if (point['lon'] < self.lon_pad) or (point['lon'] > (360 - self.lon_pad)):
-                            # trajectory path crosses meridian -> include full longitude range
-                            subset_lon = slice(0, 360)
-                        else:
-                            subset_lon = slice(point['lon'] - self.lon_pad, point['lon'] + self.lon_pad)
-                        # Interpolate onto pressure level
-                        raw_local_data = variable_at_time.sel(lat=subset_lat, lon=subset_lon).expand_dims({'time': time_array})
-                        local_data = self.winter_file.interpolate(raw_local_data, pressure_array, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
-                        variable_data = local_data.squeeze('time').squeeze('pres')
-                        # Mask NaNs before interpolation
-                        variable_masked = np.ma.masked_invalid(variable_data.values)
-                        xx, yy = np.meshgrid(variable_data.lon.values, variable_data.lat.values)
-                        x1 = xx[~variable_masked.mask]
-                        y1 = yy[~variable_masked.mask]
-                        variable_valid = variable_masked[~variable_masked.mask]
-                        # Interpolate onto traj lat/lon
-                        values[t_idx] = griddata((x1, y1), variable_valid.ravel(), (point['lon'], point['lat']), method=self.traj_interpolation)
-                    except scipy.spatial.qhull.QhullError:
-                        # Repeat but with larger lat/lon pad
-                        # Lat/lon subset
-                        subset_lat = slice(point['lat'] - 2*self.lat_pad, point['lat'] + 2*self.lat_pad)
-                        if (point['lon'] < self.lon_pad) or (point['lon'] > (360 - self.lon_pad)):
-                            # trajectory path crosses meridian -> include full longitude range
-                            subset_lon = slice(0, 360)
-                        else:
-                            subset_lon = slice(point['lon'] - self.lon_pad, point['lon'] + self.lon_pad)
-                        # Interpolate onto pressure level
-                        raw_local_data = variable_at_time.sel(lat=subset_lat, lon=subset_lon).expand_dims({'time': time_array})
-                        local_data = self.winter_file.interpolate(raw_local_data, pressure_array, interpolation=self.pres_interpolation, extrapolate=self.pres_extrapolate, fill_value=self.fill_value)
-                        variable_data = local_data.squeeze('time').squeeze('pres')
-                        # Mask NaNs before interpolation
-                        variable_masked = np.ma.masked_invalid(variable_data.values)
-                        xx, yy = np.meshgrid(variable_data.lon.values, variable_data.lat.values)
-                        x1 = xx[~variable_masked.mask]
-                        y1 = yy[~variable_masked.mask]
-                        variable_valid = variable_masked[~variable_masked.mask]
-                        # Interpolate onto traj lat/lon
-                        values[t_idx] = griddata((x1, y1), variable_valid.ravel(), (point['lon'], point['lat']), method=self.traj_interpolation)
+                    vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+                    # switch to pressure levels
+                    P_surf = self.winter_file.variable('PS').sel(time=time).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation).item() # surface pressure
+                    vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
+                    vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
+                    # interpolate onto traj pressure
+                    values[t_idx] = vertical_profile.interp(pressure=point['PRESSURE'], method=self.traj_interpolation)
                 t_idx = t_idx + 1
             # Bundle into DataArray
             values = xr.DataArray(values, name = variable_name,
@@ -357,21 +319,12 @@ class ClimateAlongTrajectory:
         If 3-D+time variables were not requested on init, this function will be
         called by add_variable the first time a 3-D+time variable is added
         '''
-        # Subset pad in lat and lon
-        self.lat_pad = 7 * max(abs(np.diff(self.winter_file.variable('lat'))))
-        self.lon_pad = 7 * max(abs(np.diff(self.winter_file.variable('lon'))))
-
         # Store pressure of surface and lowest model level
-        self.add_variable('PS') # always store surface pressure
-        P0 = self.winter_file.variable('P0').item()
-        hyam = self.winter_file.variable('hyam')
-        hybm = self.winter_file.variable('hybm')
-        self.lowest_model_pressure = (hyam * P0 + hybm * self.data['PS']).isel(lev=-1)
-
-        # Set arguments for Ngl.vinth2p
-        self.pres_interpolation = 'linear'  # for Ngl.vinth2p; options=linear, log, log-log
-        self.pres_extrapolate = False  # for Ngl.vinth2p
-        self.fill_value = np.nan  # for winter_file.interpolate
+        self.add_variable('PS')
+        self.P0 = self.winter_file.variable('P0').item()
+        self.hyam = self.winter_file.variable('hyam')
+        self.hybm = self.winter_file.variable('hybm')
+        self.lowest_model_pressure = (self.hyam * self.P0 + self.hybm * self.data['PS']).isel(lev=-1)
 
         # Store status: ready to interpolate in pressure
         self.ready_pinterp = True
