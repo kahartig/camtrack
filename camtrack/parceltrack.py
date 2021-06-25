@@ -183,6 +183,7 @@ class ClimateAlongTrajectory:
                         'THETA_hc': potential temperature
                         'THETADEV_hc': potential temperature anomaly from
                                        time-average
+                        'DSE_hc': dry static energy
         below_LML: string
             retrieval method for interpolation when trajectory is below lowest model level
             if 'NaN': return np.nan
@@ -208,6 +209,12 @@ class ClimateAlongTrajectory:
                 elif prefix == 'THETA':
                     variable = 'PS' # filler; unused
                 elif prefix == 'THETADEV':
+                    variable = 'PS' # filler; unused
+                elif prefix == 'DSE':
+                    required = ['T_1D', 'Z3_1D']
+                    for var in required:
+                        if var not in self.data.data_vars:
+                            self.add_variable(var, below_LML)
                     variable = 'PS' # filler; unused
                 else:
                     raise ValueError('Invalid variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
@@ -238,6 +245,13 @@ class ClimateAlongTrajectory:
                 values = values - values.mean(dim='time')
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature anomaly from time-avg'})
+                variable_name = variable_key
+            elif prefix == 'DSE':
+                c_p = 1005.7 # specific heat of dry air, J/kg*K
+                g = 9.81 # m/s2
+                values = (c_p*self.data['T_1D'] + g*self.data['Z3_1D']) / c_p
+                values.name = variable_key
+                values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
                 variable_name = variable_key
 
         # Two-dimensional climate variables
