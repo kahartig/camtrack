@@ -359,7 +359,7 @@ class ClimateAlongTrajectory:
         # Map hard-coded variable names to the CAM variables they require
         #  note that THETA and THETADEV don't actually require PS, but including
         #  check simplifies handling in add_variable
-        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS'}
+        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS', 'DSE_hc': 'Z3'}
 
         # Standard CAM variable
         if '_' not in variable_key:
