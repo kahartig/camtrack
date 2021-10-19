@@ -14,6 +14,7 @@ import xarray as xr
 import pandas as pd
 import os
 import cftime
+import datetime
 import calendar
 import scipy # for qhull error
 
@@ -228,6 +229,10 @@ class ClimateAlongTrajectory:
         # Load requested variable
         raw_data = self.winter_file.variable(variable)
 
+        # Set tolerance for 'nearest' time
+        # if timestep is off by a few miliseconds, select within half a timestep
+        dt_tol = datetime.timedelta(seconds=self.winter_file.time_step/2)
+
         if hardcoded:
             if prefix == 'THETA':
                 p_0 = 1e5 # reference pressure 1,000 hPa
@@ -264,7 +269,7 @@ class ClimateAlongTrajectory:
             t_idx = 0
             for age, point in self.trajectory.iterrows():
                 time = point['cftime date']
-                variable_at_time = raw_data.sel(time=time)
+                variable_at_time = raw_data.sel(time=time, method='nearest', tolerance=dt_tol)
 
                 # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
                 if point['lon'] > max(raw_data['lon'].values):
@@ -289,7 +294,7 @@ class ClimateAlongTrajectory:
             t_idx = 0
             for age, point in self.trajectory.iterrows():
                 time = point['cftime date']
-                variable_at_time = raw_data.sel(time=time)
+                variable_at_time = raw_data.sel(time=time, method='nearest', tolerance=dt_tol)
 
                 # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
                 if point['lon'] > max(raw_data['lon'].values):
@@ -310,7 +315,7 @@ class ClimateAlongTrajectory:
                 else:
                     vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
                     # switch to pressure levels
-                    P_surf = self.winter_file.variable('PS').sel(time=time).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation).item() # surface pressure
+                    P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
                     vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
                     vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
                     # interpolate onto traj pressure
