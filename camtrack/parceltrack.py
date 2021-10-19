@@ -123,7 +123,9 @@ class ClimateAlongTrajectory:
             self.check_variable_exists(key)
 
         # Select a single trajectory
-        self.trajectory = trajectories.get_trajectory(trajectory_number, 3)
+        cam_cadence = int(winter_file.time_step/3600) # CAM timestep in hours; anything < 1 -> 0
+        traj_cadence = cam_cadence if cam_cadence >= 1 else 1 # match CAM, lowest allowed value is 1 hour
+        self.trajectory = trajectories.get_trajectory(trajectory_number, traj_cadence)
         self.direction = trajectories.direction
 
         # Retrieve time, lat, lon along trajectory

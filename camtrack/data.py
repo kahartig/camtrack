@@ -23,6 +23,7 @@ import xarray as xr
 import pandas as pd
 import os
 import cftime
+import datetime
 import calendar
 import Ngl
 import scipy.interpolate as interpolate
@@ -456,6 +457,8 @@ class WinterCAM:
     time_calendar: string
         calendar type for CAM file time dimension
         retrieved directly from dataset
+    time_step: int
+        average time, in seconds, between time stamps
     dataset: xarray.Dataset
         contains all variables from CAM file(s) indicated in init
     '''
@@ -512,6 +515,11 @@ class WinterCAM:
         self.time_calendar = dataset.time.item(0).calendar
         ordinal_times = cftime.date2num(dataset['time'], units=self.time_units, calendar=self.time_calendar)
         self.dataset = dataset.assign_coords({'ordinal_time': ('time', ordinal_times)})
+
+        # Determine time step
+        timedeltas = np.diff(self.dataset['time'][:10]) # from first 10 values
+        avg_timedelta = sum(timedeltas, datetime.timedelta(0)) / len(timedeltas)
+        self.time_step = avg_timedelta.seconds
 
     def variable(self, key):
         '''
