@@ -301,7 +301,7 @@ class ClimateAlongTrajectory:
             
             # Identify a corresponding surface-level variable, if any
             surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
-            if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.data_vars):
+            if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.dataset.data_vars):
                 add_surf = True
             else:
                 add_surf = False
@@ -339,7 +339,7 @@ class ClimateAlongTrajectory:
                     if add_surf and (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
                         # append surface-level value below lowest model level, if available
                         surface_value = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=dt_tol).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
-                        surface_value = surface_value.assign_coords('pressure': P_surf) # assign surface pressure to surface-level value
+                        surface_value = surface_value.assign_coords({'pressure': P_surf}) # assign surface pressure to surface-level value
                         vertical_profile = xr.concat([vertical_profile.reset_coords('lev', drop=True), surface_value], dim='pressure')
                     # interpolate onto traj pressure
                     values[t_idx] = vertical_profile.interp(pressure=point['PRESSURE'], method=self.traj_interpolation)
