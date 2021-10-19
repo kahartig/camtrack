@@ -299,6 +299,13 @@ class ClimateAlongTrajectory:
             if not to_1D:
                 raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add '_1D' to end of variable name and interpolate onto pressure as well")
             
+            # Identify a corresponding surface-level variable, if any
+            surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
+            if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.data_vars):
+                add_surf = True
+            else:
+                add_surf = False
+
             variable_name = variable_key
             values = np.zeros(len(self.trajectory))
             
@@ -315,7 +322,7 @@ class ClimateAlongTrajectory:
                 if not self.ready_pinterp:
                     self.setup_pinterp()
 
-                if point['PRESSURE'] > self.lowest_model_pressure.sel(time=time):
+                if (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)) and (not add_surf):
                     # point is below lowest data level (higher pressure)
                     if below_LML == 'NaN':
                         values[t_idx] = np.nan
@@ -329,6 +336,11 @@ class ClimateAlongTrajectory:
                     P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
                     vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
                     vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
+                    if add_surf and (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
+                        # append surface-level value below lowest model level, if available
+                        surface_value = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=dt_tol).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+                        surface_value = surface_value.assign_coords('pressure': P_surf) # assign surface pressure to surface-level value
+                        vertical_profile = xr.concat([vertical_profile.reset_coords('lev', drop=True), surface_value], dim='pressure')
                     # interpolate onto traj pressure
                     values[t_idx] = vertical_profile.interp(pressure=point['PRESSURE'], method=self.traj_interpolation)
                 t_idx = t_idx + 1
