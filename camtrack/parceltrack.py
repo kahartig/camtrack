@@ -254,9 +254,20 @@ class ClimateAlongTrajectory:
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature anomaly from time-avg'})
                 variable_name = variable_key
             elif prefix == 'DSE':
-                c_p = 1005.7 # specific heat of dry air, J/kg*K
+                # Specific heat
+                c_p_dry = 1005.7 # specific heat of dry air, J/kg*K
+                c_p_vapor = 1859 # specific heat of water vapor, J/kg*K
+                try:
+                    # Use specific humidity to calculate c_p of moist air
+                    if 'Q_1D' not in self.data.data_vars:
+                        self.add_variable('Q_1D', below_LML)
+                    c_p = c_p_dry + self.data['Q_1D'] * c_p_vapor
+                except ValueError:
+                    # ValueError raised when calling self.add_variable();
+                    # specific humidity missing from CAM file
+                    c_p = c_p_dry
                 g = 9.81 # m/s2
-                values = (c_p*self.data['T_1D'] + g*self.data['Z3_1D']) / c_p
+                values = self.data['T_1D'] + (g/c_p)*self.data['Z3_1D']
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
                 variable_name = variable_key
