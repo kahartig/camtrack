@@ -187,7 +187,6 @@ class ClimateAlongTrajectory:
                         'THETADEV_hc': potential temperature anomaly from
                                        time-average
                         'DSE_hc': dry static energy
-                        'DSElapse_hc': vertical derivative of DSE w.r.t height (K/m)
         below_LML: string
             retrieval method for interpolation when trajectory is below lowest model level
             if 'NaN': return np.nan
@@ -220,8 +219,6 @@ class ClimateAlongTrajectory:
                         if var not in self.data.data_vars:
                             self.add_variable(var, below_LML)
                     variable = 'PS' # filler; unused
-                elif prefix == 'DSElapse':
-                    variable = 'T'
                 else:
                     raise ValueError('Invalid variable key for a hard-coded variable {}. Check docs for ClimateAlongTrajectory for a list of valid hard-coded variables'.format(variable_key))
             else:
@@ -273,53 +270,6 @@ class ClimateAlongTrajectory:
                 values = self.data['T_1D'] + (g/c_p)*self.data['Z3_1D']
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
-                variable_name = variable_key
-            elif prefix == 'DSElapse':
-                # Specific heat
-                c_p_dry = 1005.7 # specific heat of dry air, J/kg*K
-                c_p_vapor = 1859 # specific heat of water vapor, J/kg*K
-                try:
-                    # Use specific humidity to calculate c_p of moist air
-                    if 'Q_1D' not in self.data.data_vars:
-                        self.add_variable('Q_1D', below_LML)
-                    c_p = c_p_dry + self.data['Q_1D'] * c_p_vapor
-                except ValueError:
-                    # ValueError raised when calling self.add_variable();
-                    # specific humidity missing from CAM file
-                    c_p = c_p_dry
-                g = 9.81 # m/s2
-                # Set up for vertical interpolation if it has never been done before
-                if not self.ready_pinterp:
-                    self.setup_pinterp()
-                values = np.zeros(len(self.trajectory))
-                t_idx = 0
-                for age, point in self.trajectory.iterrows():
-                    time = point['cftime date']
-                    if (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
-                        # point is below lowest data level (higher pressure)
-                        values[t_idx] = np.nan # IGNORE below_LML setting for DSElapse
-                    else:
-                        T_profile = self.winter_file.variable('T').sel(time=time, method='nearest', tolerance=dt_tol
-                            ).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
-                        Z3_profile = self.winter_file.variable('Z3').sel(time=time, method='nearest', tolerance=dt_tol
-                            ).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
-                        vertical_profile = T_profile + (g/c_p)*Z3_profile
-                        # add height/gph levels
-                        vertical_profile = vertical_profile.assign_coords(altitude=("lev", Z3_profile.values))
-                        # switch to pressure levels
-                        P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
-                        vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
-                        vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
-                        # first derivative in vertical
-                        first_deriv = vertical_profile.differentiate('altitude')
-                        # interpolate onto traj pressure
-                        values[t_idx] = first_deriv.interp(pressure=point['PRESSURE'], method=self.traj_interpolation, kwargs={"fill_value": None})
-                    t_idx = t_idx + 1
-                # Bundle into DataArray
-                values = xr.DataArray(values, name = variable_key,
-                                      dims=('time',),
-                                      coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
-                                      attrs={'units': 'K/m', 'long_name': 'Vertical derivative of dry static energy'})
                 variable_name = variable_key
 
         # Two-dimensional climate variables
@@ -443,7 +393,7 @@ class ClimateAlongTrajectory:
         # Map hard-coded variable names to the CAM variables they require
         #  note that THETA and THETADEV don't actually require PS, but including
         #  check simplifies handling in add_variable
-        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS', 'DSE_hc': 'Z3', 'DSElapse_hc': 'Z3'}
+        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS', 'DSE_hc': 'Z3'}
 
         # Standard CAM variable
         if '_' not in variable_key:
