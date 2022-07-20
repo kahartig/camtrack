@@ -212,13 +212,14 @@ class ClimateAlongTrajectory:
                 if prefix == 'THETA':
                     variable = 'PS' # filler; unused
                 elif prefix == 'DSE':
-                    required = ['T:1D', 'Z3:1D']
+                    variable = 'PS' # filler; unused
+                else:
+                    raise ValueError('Invalid variable key for a hard-coded variable {}. Check self.hc_requires for a list of valid hard-coded variables'.format(variable_key))
+                required = self.hc_requires[variable_key]
+                if required is not None:
                     for var in required:
                         if var not in self.data.data_vars:
                             self.add_variable(var, below_LML)
-                    variable = 'PS' # filler; unused
-                else:
-                    raise ValueError('Invalid variable key for a hard-coded variable {}. Check self.hc_requires a list of valid hard-coded variables'.format(variable_key))
             else:
                 raise ValueError("Invalid suffix {} for variable key {}; must be '1D' or 'hc'".format(suffix, variable_key))
         else:
@@ -378,22 +379,26 @@ class ClimateAlongTrajectory:
         variable_key: string
             variable name to be checked against self.winter_file data variables
         '''
-        hc_requires = {'THETA:hc': 'PS', 'DSE:hc': 'Z3'}
-
         # Standard CAM variable
         if ':' not in variable_key:
             if variable_key not in self.winter_file.dataset.data_vars:
-                raise ValueError('CAM output files are missing a requested variable {}'.format(variable_key))
+                raise ValueError('CAM output files are missing a requested variable: {}'.format(variable_key))
         else:
             # Interpolated to 1-D
             if ':1D' in variable_key:
-                prefix, suffix = variable_key.split(':', 1)
-                if prefix not in self.winter_file.dataset.data_vars:
-                    raise ValueError("CAM output files are missing a variable to be interpolated to 1D {}".format(variable_key))
+                variable, tag = variable_key.split(':', 1)
+                if variable not in self.winter_file.dataset.data_vars:
+                    raise ValueError("CAM output files are missing a variable to be interpolated to 1D: {}".format(variable_key))
             # Hard-coded
-            elif variable_key in hc_requires.keys():
-                if hc_requires[variable_key] not in self.winter_file.dataset.data_vars:
-                    raise ValueError("CAM output files are missing the variable {} which is required by the requested hard-coded variable {}".format(hc_requires[variable_key], variable_key))
+            elif variable_key in self.hc_requires.keys():
+                if self.hc_requires[variable_key] not in self.winter_file.dataset.data_vars:
+                    raise ValueError("CAM output files are missing the variable {} which is required by the requested hard-coded variable {}".format(self.hc_requires[variable_key], variable_key))
             # Invalid
             else:
-                raise ValueError('Invalid variable key {}. See WinterCAM.dataset.data_vars for list of allowed CAM variables and ClimateAlongTrajectory docs for valid hard-coded variables'.format(variable_key))
+                raise ValueError('Invalid variable key {}. See WinterCAM.dataset.data_vars for list of allowed CAM variables and self.hc_requires for valid hard-coded variables'.format(variable_key))
+
+    @property
+    def hc_requires(self):
+        # List of CAM variables required by each hard-coded variable
+        return {'THETA:hc': None, 'DSE:hc': ['T:1D', 'Z3:1D']}
+    
