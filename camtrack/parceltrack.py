@@ -203,17 +203,12 @@ class ClimateAlongTrajectory:
         to_1D = False
         hardcoded = False
         if ':' in variable_key:
-            prefix, suffix = variable_key.split(':', 1)
-            if suffix == '1D':
+            variable, tag = variable_key.split(':', 1)
+            if tag == '1D':
                 to_1D = True
-                variable = prefix
-            elif suffix == 'hc':
+            elif tag == 'hc':
                 hardcoded = True
-                if prefix == 'THETA':
-                    variable = 'PS' # filler; unused
-                elif prefix == 'DSE':
-                    variable = 'PS' # filler; unused
-                else:
+                if variable_key not in self.hc_requires.keys():
                     raise ValueError('Invalid variable key for a hard-coded variable {}. Check self.hc_requires for a list of valid hard-coded variables'.format(variable_key))
                 required = self.hc_requires[variable_key]
                 if required is not None:
@@ -221,58 +216,66 @@ class ClimateAlongTrajectory:
                         if var not in self.data.data_vars:
                             self.add_variable(var, below_LML)
             else:
-                raise ValueError("Invalid suffix {} for variable key {}; must be '1D' or 'hc'".format(suffix, variable_key))
+                raise ValueError("Invalid tag {} on variable key {}; must be '1D' or 'hc'".format(tag, variable_key))
         else:
             variable = variable_key
 
-        # Load requested variable
-        data_dims = self.winter_file.variable(variable).dims
-
         if hardcoded:
-            if prefix == 'THETA':
-                p_0 = 1e5 # reference pressure 1,000 hPa
-                kappa = 2./7. # Poisson constant
-                T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
-                p_values = self.traj_pres
-                values = T_values * (p_0 / p_values)**kappa
-                values.name = variable_key
-                values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
-                variable_name = variable_key
-            elif prefix == 'DSE':
-                # Specific heat
-                c_p_dry = 1005.7 # specific heat of dry air, J/kg*K
-                c_p_vapor = 1859 # specific heat of water vapor, J/kg*K
-                try:
-                    # Use specific humidity to calculate c_p of moist air
-                    if 'Q:1D' not in self.data.data_vars:
-                        self.add_variable('Q:1D', below_LML)
-                    c_p = c_p_dry + self.data['Q:1D'] * c_p_vapor
-                except ValueError:
-                    # ValueError raised when calling self.add_variable();
-                    # specific humidity missing from CAM file
-                    c_p = c_p_dry
-                g = 9.81 # m/s2
-                values = self.data['T:1D'] + (g/c_p)*self.data['Z3:1D']
-                values.name = variable_key
-                values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
-                variable_name = variable_key
-            # Update Dataset with new DataArray
-            self.data[variable_name] = values
-
-        # Two-dimensional climate variables
-        elif data_dims == ('time', 'lat', 'lon'):
-            self.add_2D_variable(variable)
-
-        # Three-dimensional climate variables
-        elif data_dims == ('time', 'lev', 'lat', 'lon'):
-            if to_1D:
-                self.add_3Dto1D_variable(variable, below_LML)
-            else:
-                raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
+            self.add_hardcoded_variable(variable)
 
         else:
-            raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, data_dims))
+            # Load variable dimensions
+            data_dims = self.winter_file.variable(variable).dims
 
+            # Two-dimensional climate variables
+            if data_dims == ('time', 'lat', 'lon'):
+                self.add_2D_variable(variable)
+
+            # Three-dimensional climate variables
+            elif data_dims == ('time', 'lev', 'lat', 'lon'):
+                if to_1D:
+                    self.add_3Dto1D_variable(variable, below_LML)
+                else:
+                    raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
+
+            # Error: invalid/unexpected dimensions
+            else:
+                raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, data_dims))
+
+    def add_hardcoded_variable(self, variable):
+        '''
+        Add a hard-coded variable along trajectory path
+        '''
+        if variable == 'THETA':
+            p_0 = 1e5 # reference pressure 1,000 hPa
+            kappa = 2./7. # Poisson constant
+            T_values = self.traj_file.col2da(self.traj_number, 'AIR_TEMP', include_coords='cftime date').swap_dims({'traj age': 'cftime date'}).rename({'cftime date': 'time'})
+            p_values = self.traj_pres
+            values = T_values * (p_0 / p_values)**kappa
+            values.name = variable
+            values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
+            variable_name = variable
+        elif variable == 'DSE':
+            # Specific heat
+            c_p_dry = 1005.7 # specific heat of dry air, J/kg*K
+            c_p_vapor = 1859 # specific heat of water vapor, J/kg*K
+            try:
+                # Use specific humidity to calculate c_p of moist air
+                if 'Q:1D' not in self.data.data_vars:
+                    self.add_variable('Q:1D', below_LML)
+                c_p = c_p_dry + self.data['Q:1D'] * c_p_vapor
+            except ValueError:
+                # ValueError raised when calling self.add_variable();
+                # specific humidity missing from CAM file
+                c_p = c_p_dry
+            g = 9.81 # m/s2
+            values = self.data['T:1D'] + (g/c_p)*self.data['Z3:1D']
+            values.name = variable
+            values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
+            variable_name = variable
+
+        # Update Dataset with new DataArray
+        self.data[variable_name] = values
 
     def add_2D_variable(self, variable):
         '''
