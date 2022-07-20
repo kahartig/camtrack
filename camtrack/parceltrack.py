@@ -266,7 +266,7 @@ class ClimateAlongTrajectory:
         # Three-dimensional climate variables
         elif data_dims == ('time', 'lev', 'lat', 'lon'):
             if to_1D:
-                self.add_3Dto1D_variable(variable)
+                self.add_3Dto1D_variable(variable, below_LML)
             else:
                 raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
 
