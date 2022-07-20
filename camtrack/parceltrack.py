@@ -228,10 +228,6 @@ class ClimateAlongTrajectory:
         # Load requested variable
         data_dims = self.winter_file.variable(variable).dims
 
-        # Set tolerance for 'nearest' time
-        # if timestep is off by a few miliseconds, select within half a timestep
-        dt_tol = datetime.timedelta(seconds=self.winter_file.time_step/2)
-
         if hardcoded:
             if prefix == 'THETA':
                 p_0 = 1e5 # reference pressure 1,000 hPa
@@ -265,12 +261,12 @@ class ClimateAlongTrajectory:
 
         # Two-dimensional climate variables
         elif data_dims == ('time', 'lat', 'lon'):
-            add_2D_variable(variable)
+            self.add_2D_variable(variable)
 
         # Three-dimensional climate variables
         elif data_dims == ('time', 'lev', 'lat', 'lon'):
             if to_1D:
-                add_3Dto1D_variable(variable)
+                self.add_3Dto1D_variable(variable)
             else:
                 raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
 
@@ -294,7 +290,7 @@ class ClimateAlongTrajectory:
         t_idx = 0
         for age, point in self.trajectory.iterrows():
             time = point['cftime date']
-            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=dt_tol)
+            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=self.dt_tol)
 
             # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
             if point['lon'] > max(variable_data['lon'].values):
@@ -344,12 +340,12 @@ class ClimateAlongTrajectory:
         t_idx = 0
         for age, point in self.trajectory.iterrows():
             time = point['cftime date']
-            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=dt_tol)
+            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=self.dt_tol)
 
             # If needed, load surface-level data
             if surf_available and (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
                 add_surf = True
-                surf_at_time = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=dt_tol)
+                surf_at_time = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=self.dt_tol)
             else:
                 add_surf = False
 
@@ -370,7 +366,7 @@ class ClimateAlongTrajectory:
             else:
                 vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
                 # switch to pressure levels
-                P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
+                P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=self.dt_tol).item()
                 vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
                 vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
                 if add_surf:
@@ -444,4 +440,11 @@ class ClimateAlongTrajectory:
     def hc_requires(self):
         # List of CAM variables required by each hard-coded variable
         return {'THETA:hc': None, 'DSE:hc': ['T:1D', 'Z3:1D']}
+
+    @property
+    def dt_tol(self):
+        # Set tolerance for 'nearest' time
+        # if timestep is off by a few miliseconds, select within half a timestep
+        return datetime.timedelta(seconds=self.winter_file.time_step/2)
+    
     
