@@ -95,12 +95,12 @@ class ClimateAlongTrajectory:
             list of variables that will be stored
             Must be a CAM variable name (field in all caps) OR one of two types
             of special variables:
-                ends in '_1D': 3-D+time variable to be interpolated directly
+                ends in ':1D': 3-D+time variable to be interpolated directly
                     onto trajectory path
-                ends in '_hc': hard-coded variable with special handling
+                ends in ':hc': hard-coded variable with special handling
                     Available options:
-                    'LWP_hc': liquid water path (vertical integral of 'Q')
-                    'THETA_hc': potential temperature
+                    'LWP:hc': liquid water path (vertical integral of 'Q')
+                    'THETA:hc': potential temperature
         traj_interpolation: 'nearest' or 'linear'
             interpolation method for matching trajectory lat-lon to CAM variables
         below_LML: string
@@ -165,12 +165,15 @@ class ClimateAlongTrajectory:
         Interpolate a new variable onto trajectory path
 
         The new variable is automatically added to self.data
+        For 2-D+time variables:
+            to interpolate onto time, lat, and lon, simply provide the variable
+              name e.g. 'TS'
         For 3-D+time variables:
-            to interpolate onto time, lat, and lon but retain entire vertical
-              column, provide variable name e.g. 'OMEGA'
             to interpolate onto pressure as well as time, lat, and lon
-              (collapse vertical dimension), add '_1D' to end of variable name
-              e.g. 'OMEGA_1D'
+              (collapse vertical dimension), add ':1D' to end of variable name
+              e.g. 'OMEGA:1D'
+            interpolating onto time, lat, and lon and retaining the vertical
+              dimension is not currently supported
 
         Parameters
         ----------
@@ -178,15 +181,15 @@ class ClimateAlongTrajectory:
             name of variable to be interpolated onto trajectory path
             Must be a CAM variable name (field in all caps) OR one of two types
             of special variables:
-                ends in '_1D': 3-D+time variable to be interpolated directly
-                    onto trajectory path, e.g. 'T_1D' or 'OMEGA_1D'
-                ends in '_hc': hard-coded variable with special handling
+                ends in ':1D': 3-D+time variable to be interpolated directly
+                    onto trajectory path, e.g. 'OMEGA:1D'
+                ends in ':hc': hard-coded variable with special handling
                     Available options:
-                        'LWP_hc': liquid water path (vertical integral of 'Q')
-                        'THETA_hc': potential temperature
-                        'THETADEV_hc': potential temperature anomaly from
+                        'LWP:hc': liquid water path (vertical integral of 'Q')
+                        'THETA:hc': potential temperature
+                        'THETADEV:hc': potential temperature anomaly from
                                        time-average
-                        'DSE_hc': dry static energy
+                        'DSE:hc': dry static energy
         below_LML: string
             retrieval method for interpolation when trajectory is below lowest model level
             if 'NaN': return np.nan
@@ -199,8 +202,8 @@ class ClimateAlongTrajectory:
         # Identify if variable requires special handling
         to_1D = False
         hardcoded = False
-        if '_' in variable_key:
-            prefix, suffix = variable_key.split('_', 1)
+        if ':' in variable_key:
+            prefix, suffix = variable_key.split(':', 1)
             if suffix == '1D':
                 to_1D = True
                 variable = prefix
@@ -214,7 +217,7 @@ class ClimateAlongTrajectory:
                 elif prefix == 'THETADEV':
                     variable = 'PS' # filler; unused
                 elif prefix == 'DSE':
-                    required = ['T_1D', 'Z3_1D']
+                    required = ['T:1D', 'Z3:1D']
                     for var in required:
                         if var not in self.data.data_vars:
                             self.add_variable(var, below_LML)
@@ -259,15 +262,15 @@ class ClimateAlongTrajectory:
                 c_p_vapor = 1859 # specific heat of water vapor, J/kg*K
                 try:
                     # Use specific humidity to calculate c_p of moist air
-                    if 'Q_1D' not in self.data.data_vars:
-                        self.add_variable('Q_1D', below_LML)
-                    c_p = c_p_dry + self.data['Q_1D'] * c_p_vapor
+                    if 'Q:1D' not in self.data.data_vars:
+                        self.add_variable('Q:1D', below_LML)
+                    c_p = c_p_dry + self.data['Q:1D'] * c_p_vapor
                 except ValueError:
                     # ValueError raised when calling self.add_variable();
                     # specific humidity missing from CAM file
                     c_p = c_p_dry
                 g = 9.81 # m/s2
-                values = self.data['T_1D'] + (g/c_p)*self.data['Z3_1D']
+                values = self.data['T:1D'] + (g/c_p)*self.data['Z3:1D']
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
                 variable_name = variable_key
@@ -297,7 +300,7 @@ class ClimateAlongTrajectory:
         # Three-dimensional climate variables
         elif raw_data.dims == ('time', 'lev', 'lat', 'lon'):
             if not to_1D:
-                raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add '_1D' to end of variable name and interpolate onto pressure as well")
+                raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
             
             # Identify a corresponding surface-level variable, if any
             surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
@@ -393,16 +396,16 @@ class ClimateAlongTrajectory:
         # Map hard-coded variable names to the CAM variables they require
         #  note that THETA and THETADEV don't actually require PS, but including
         #  check simplifies handling in add_variable
-        hc_requires = {'LWP_hc': 'Q', 'THETA_hc': 'PS', 'THETADEV_hc': 'PS', 'DSE_hc': 'Z3'}
+        hc_requires = {'LWP:hc': 'Q', 'THETA:hc': 'PS', 'THETADEV:hc': 'PS', 'DSE:hc': 'Z3'}
 
         # Standard CAM variable
-        if '_' not in variable_key:
+        if ':' not in variable_key:
             if variable_key not in self.winter_file.dataset.data_vars:
                 raise ValueError('CAM output files are missing a requested variable {}'.format(variable_key))
         else:
             # Interpolated to 1-D
-            if '_1D' in variable_key:
-                prefix, suffix = variable_key.split('_', 1)
+            if ':1D' in variable_key:
+                prefix, suffix = variable_key.split(':', 1)
                 if prefix not in self.winter_file.dataset.data_vars:
                     raise ValueError("CAM output files are missing a variable to be interpolated to 1D {}".format(variable_key))
             # Hard-coded
