@@ -226,7 +226,7 @@ class ClimateAlongTrajectory:
             variable = variable_key
 
         # Load requested variable
-        raw_data = self.winter_file.variable(variable)
+        data_dims = self.winter_file.variable(variable).dims
 
         # Set tolerance for 'nearest' time
         # if timestep is off by a few miliseconds, select within half a timestep
@@ -260,94 +260,137 @@ class ClimateAlongTrajectory:
                 values.name = variable_key
                 values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
                 variable_name = variable_key
+            # Update Dataset with new DataArray
+            self.data[variable_name] = values
 
         # Two-dimensional climate variables
-        elif raw_data.dims == ('time', 'lat', 'lon'):
-            variable_name = variable
-            values = np.zeros(len(self.trajectory))
-            
-            t_idx = 0
-            for age, point in self.trajectory.iterrows():
-                time = point['cftime date']
-                variable_at_time = raw_data.sel(time=time, method='nearest', tolerance=dt_tol)
-
-                # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
-                if point['lon'] > max(raw_data['lon'].values):
-                    variable_at_time = assist.roll_longitude(variable_at_time)
-                
-                values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation, kwargs={'bounds_error': True})
-                t_idx = t_idx + 1
-            # Bundle into DataArray
-            values = xr.DataArray(values, name = variable,
-                                  dims=('time',),
-                                  coords={'time': self.traj_time, 'lat': self.traj_lat, 'lon': self.traj_lon},
-                                  attrs=raw_data.attrs)
+        elif data_dims == ('time', 'lat', 'lon'):
+            add_2D_variable(variable)
 
         # Three-dimensional climate variables
-        elif raw_data.dims == ('time', 'lev', 'lat', 'lon'):
-            if not to_1D:
+        elif data_dims == ('time', 'lev', 'lat', 'lon'):
+            if to_1D:
+                add_3Dto1D_variable(variable)
+            else:
                 raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
+
+        else:
+            raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, data_dims))
+
+
+    def add_2D_variable(self, variable):
+        '''
+        Interpolate (time, lat, lon) variable onto trajectory path
+        '''
+        # Checks
+        # is variable present in CAM file?
+        self.check_variable_exists(variable)
+        # does variable have the correct dimensions?
+        variable_data = self.winter_file.variable(variable)
+        if variable_data.dims != ('time', 'lat', 'lon'):
+            raise ValueError("The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon)".format(variable, variable_data.dims))
+
+        values = np.zeros(len(self.trajectory))
+        t_idx = 0
+        for age, point in self.trajectory.iterrows():
+            time = point['cftime date']
+            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=dt_tol)
+
+            # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
+            if point['lon'] > max(variable_data['lon'].values):
+                variable_at_time = assist.roll_longitude(variable_at_time)
             
-            # Identify a corresponding surface-level variable, if any
-            surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
-            if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.dataset.data_vars):
+            values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation, kwargs={'bounds_error': True})
+            t_idx = t_idx + 1
+        # Bundle into DataArray
+        variable_name = variable
+        values = xr.DataArray(values, name=variable_name,
+                              dims=('time',),
+                              coords={'time': self.traj_time, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                              attrs=variable_data.attrs)
+
+        # Update Dataset with new DataArray
+        self.data[variable_name] = values
+
+
+    def add_3Dto1D_variable(self, variable, below_LML):
+        '''
+        Interpolate (time, lev, lat, lon) variable onto trajectory path
+        '''
+        # Checks
+        # is variable present in CAM file?
+        self.check_variable_exists(variable)
+        # does variable have the correct dimensions?
+        variable_data = self.winter_file.variable(variable)
+        if variable_data.dims != ('time', 'lev', 'lat', 'lon'):
+            raise ValueError("The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lev, lat, lon)".format(variable, variable_data.dims))
+        # set up for vertical interpolation, if it has never been done before
+        if not self.ready_pinterp:
+            self.setup_pinterp()
+
+        # Identify a corresponding surface-level variable, if any
+        surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
+        if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.dataset.data_vars):
+            surf_available = True
+            if surface_counterpart[variable] == 'PHIS':
+                surf_scale = 1/9.8 # convert m2/s2 to m to match Z3
+            else:
+                surf_scale = 1.0
+        else:
+            surf_available = False
+
+
+        values = np.zeros(len(self.trajectory))
+        t_idx = 0
+        for age, point in self.trajectory.iterrows():
+            time = point['cftime date']
+            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=dt_tol)
+
+            # If needed, load surface-level data
+            if surf_available and (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
                 add_surf = True
+                surf_at_time = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=dt_tol)
             else:
                 add_surf = False
 
-            variable_name = variable_key
-            values = np.zeros(len(self.trajectory))
-            
-            t_idx = 0
-            for age, point in self.trajectory.iterrows():
-                time = point['cftime date']
-                variable_at_time = raw_data.sel(time=time, method='nearest', tolerance=dt_tol)
+            # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
+            if point['lon'] > max(variable_data['lon'].values):
+                variable_at_time = assist.roll_longitude(variable_at_time)
+                if add_surf:
+                    surf_at_time = assist.roll_longitude(surf_at_time)
 
-                # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
-                if point['lon'] > max(raw_data['lon'].values):
-                    variable_at_time = assist.roll_longitude(variable_at_time)
-
-                # Set up for vertical interpolation if it has never been done before
-                if not self.ready_pinterp:
-                    self.setup_pinterp()
-
-                if (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)) and (not add_surf):
-                    # point is below lowest data level (higher pressure)
-                    if below_LML == 'NaN':
-                        values[t_idx] = np.nan
-                    elif below_LML == 'LML':
-                        values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation).isel(lev=-1).values
-                    else:
-                        raise ValueError("Invalid retrieval method requested for trajectory points below lowest model level, below_LML={}. Must be 'NaN' or 'LML'".format(below_LML))
+            if (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)) and (not surf_available):
+                # point is below lowest data level (higher pressure)
+                if below_LML == 'NaN':
+                    values[t_idx] = np.nan
+                elif below_LML == 'LML':
+                    values[t_idx] = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation).isel(lev=-1).values
                 else:
-                    vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
-                    # switch to pressure levels
-                    P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
-                    vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
-                    vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
-                    if add_surf and (point['PRESSURE'] > self.lowest_model_pressure.sel(time=time)):
-                        # append surface-level value below lowest model level, if available
-                        if surface_counterpart[variable] == 'PHIS':
-                            unit_scale = 1/9.8 # convert m2/s2 to m to match Z3
-                        else:
-                            unit_scale = 1.0
-                        surface_value = unit_scale * self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=dt_tol).interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
-                        surface_value = surface_value.assign_coords({'pressure': P_surf}) # assign surface pressure to surface-level value
-                        vertical_profile = xr.concat([vertical_profile.reset_coords('lev', drop=True), surface_value], dim='pressure')
-                    # interpolate onto traj pressure
-                    values[t_idx] = vertical_profile.interp(pressure=point['PRESSURE'], method=self.traj_interpolation)
-                t_idx = t_idx + 1
-            # Bundle into DataArray
-            values = xr.DataArray(values, name = variable_name,
-                                  dims=('time',),
-                                  coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
-                                  attrs=raw_data.attrs)
+                    raise ValueError("Invalid retrieval method requested for trajectory points below lowest model level, below_LML={}. Must be 'NaN' or 'LML'".format(below_LML))
+            else:
+                vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+                # switch to pressure levels
+                P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=dt_tol).item()
+                vertical_profile = vertical_profile.assign_coords(pressure=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
+                vertical_profile = vertical_profile.swap_dims({"lev": "pressure"})
+                if add_surf:
+                    # append surface-level value below lowest model level
+                    surface_value = surf_scale * surf_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+                    surface_value = surface_value.assign_coords({'pressure': P_surf}) # assign surface pressure to surface-level value
+                    vertical_profile = xr.concat([vertical_profile.reset_coords('lev', drop=True), surface_value], dim='pressure')
+                # interpolate onto traj pressure
+                values[t_idx] = vertical_profile.interp(pressure=point['PRESSURE'], method=self.traj_interpolation)
+            t_idx = t_idx + 1
+        # Bundle into DataArray
+        variable_name = variable + ':1D'
+        values = xr.DataArray(values, name=variable_name,
+                              dims=('time',),
+                              coords={'time': self.traj_time, 'pres': self.traj_pres, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                              attrs=variable_data.attrs)
 
-        else:
-            raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, raw_data.dims))
-        
         # Update Dataset with new DataArray
         self.data[variable_name] = values
+
 
     def setup_pinterp(self):
         '''
