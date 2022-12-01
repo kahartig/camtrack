@@ -91,6 +91,16 @@ class TrajectoryFile:
         filepath:  string
             file path to HYSPLIT trajectory file
         '''
+        # Check for asterisks in .traj file and strip
+        has_asterisks = False
+        with open(filepath, "r") as og_file:
+            for line in og_file:
+                # if substring in line, flag it
+                if "********" in line.strip("\n"):
+                    has_asterisks = True
+        if has_asterisks:
+            assist.strip_asterisk(filepath)
+
         # open the .traj file
         file = open(filepath, 'r')
 

@@ -5,6 +5,7 @@ Utility functions to assist in short operations throughout camtrack
 
 Functions:
     roll_longitude: duplicate lon=0 values as lon=360
+    strip_asterisk: remove any lines with '********' from .traj file
 """
 
 # Standard imports
@@ -48,6 +49,35 @@ def roll_longitude(variable):
     lon_360 = lon_0.assign_coords(lon=360.)
     rolled_variable = xr.concat([variable, lon_360], dim='lon')
     return rolled_variable
+
+def strip_asterisk(filepath):
+    '''
+    Copy filepath to a new file with '_ASTERISK' added just before the extension,
+    then strip all lines with the substring "********" from filepath and save
+    
+    Parameters
+    ----------
+    filepath: str
+        path to a file; all lines with "********" will be removed
+    '''
+    traj_dir, traj_filename = os.path.split(filepath)
+    # Copy contents of filepath into a new file with '_ASTERISK' added before the extension
+    name, ext = os.path.splitext(traj_filename)
+    copy_filename = '{}_ASTERISK{}'.format(name, ext)
+    copy_filepath = os.path.join(traj_dir, copy_filename)
+    with open(filepath,'r') as firstfile, open(copy_filepath,'w') as secondfile:
+        for line in firstfile:
+            secondfile.write(line)
+    # Remove all lines with asterisks from original file
+    temp_filepath = os.path.join(traj_dir, '{}_temp.txt'.format(name))
+    with open(filepath, "r") as og_file:
+        with open(temp_filepath, "w") as stripped_file:
+            for line in og_file:
+                # if substring in line, then don't write it
+                if "********" not in line.strip("\n"):
+                    stripped_file.write(line)
+    # Overwrite original file with temp file
+    os.replace(temp_filepath, filepath)
 
 def set_fontsize(titles=24, labels=20, legend=20, other=16):
     '''
