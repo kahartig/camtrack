@@ -169,6 +169,115 @@ def sample_coldtail(climatology_dict, number_of_events, percentile_range, seed=N
     print("Randomly sampled {} events from the {}-{} percentile range of temperature anomalies from DJF mean".format(number_of_events, percentile_range[0], percentile_range[1]))
     return cold_events
 
+def sample_coldtail_distinct(climatology_dict, number_of_events, percentile_range, dt_min):
+    '''
+    Similar to sample_coldtail, but additionally impose a minimum separation of dt_min days
+    between all events by drawing samples iteratively and checking datetime against all
+    previously drawn events
+
+    Parameters
+    ----------
+    climatology_dict: dict
+        dictionary such as the output of climatology.anomaly_DJF(), containing
+        'diff', a (time, lat, lon) DataArray of anomalies from a mean which will
+        be arranged from lowest to highest and randomly sampled
+    number_of_events: int
+        number of events to sample from the given percentile range of the
+        anomaly array 
+    percentile_range: list-like
+        (minimum, maximum) of percentile range to sample from
+        each element is a number between 0 and 100
+    dt_min: integer
+	        Minimum separation in time imposed between all sampled events
+	        if integer, samples are drawn iteratively so that each new event must
+            be at least dt_min days apart from every other event
+
+    Returns
+    -------
+    cold_events: pandas.DataFrame
+        list of events sampled from climatology_dict['diff']
+        contains columns:
+            'time': ordinal time of event
+            'date': date string of event YYYY-MM-DD HH:MM:SS
+            'cftime date': cftime.DatetimeNoLeap() instances
+            'lat': latitude
+            'lon': longitude
+            'temp anomaly': anomaly value of event from climatology_dict['diff']
+    
+    '''
+    def samples2values(samples_idx, sorted_coord_idx, coordinates):
+        # Inputs can be either single values or iterables
+        # sorted_coord_idx = sorted_idx[index of desired coordinate]
+        try:
+            # For iterable arguments
+            coordinate_idx = [sorted_coord_idx[idx] for idx in samples_idx]
+            coordinate_values = [coordinates[c_idx] for c_idx in coordinate_idx]
+        except TypeError:
+            # For individual values
+            coordinate_idx = sorted_coord_idx[samples_idx]
+            coordinate_values = coordinates[coordinate_idx]
+        return coordinate_values, coordinate_idx
+    
+    # Unpack climatology
+    temperature_anomaly = climatology_dict['diff'].values
+    times = climatology_dict['diff'].time.values
+    latitudes = climatology_dict['diff'].lat.values
+    longitudes = climatology_dict['diff'].lon.values
+
+    # Sort by value, from most negative to most positive and NaN
+    #   first index: 0-index time array, 1-index lat array, 2-index lon array
+    #   second index runs from most negative to most positive
+    sorted_idx = np.unravel_index(temperature_anomaly.argsort(axis=None), temperature_anomaly.shape)
+
+    # Generate indices corresponding to percentile range
+    num_notnan = np.count_nonzero(~np.isnan(temperature_anomaly))
+    idx_lower = int(math.ceil( (percentile_range[0]/100.)*num_notnan ))
+    idx_upper = int(math.floor( (percentile_range[1]/100.)*num_notnan )) - 1
+    idx_in_percentile = np.arange(idx_lower, idx_upper + 1)
+    
+    # Initialize with single draw
+    samples = np.zeros(number_of_events, dtype=int)
+    ordinal_times = np.zeros(number_of_events)
+    num_draws = np.zeros(number_of_events)
+    samples[0] = random.choice(idx_in_percentile)
+    init_sample_time, _ = samples2values(samples[0], sorted_idx[0], times)
+    ordinal_times[0] = cftime.date2num(init_sample_time, 'days since 0001-01-01 00:00:00', calendar='noleap')
+    num_draws[0] = 1
+
+    # Draw subsequent samples one-by-one
+    for idx in np.arange(1, number_of_events):
+        num_alike = np.inf
+        draw = 0
+        while num_alike > 0:
+            draw = draw + 1
+            new_sample = random.choice(idx_in_percentile)
+            # Compare new sample to all previous samples
+            new_sample_time, _ = samples2values(new_sample, sorted_idx[0], times)
+            new_ordinal_time = cftime.date2num(new_sample_time, 'days since 0001-01-01 00:00:00', calendar='noleap')
+            time_diff = abs(new_ordinal_time - ordinal_times[:idx])
+            num_alike = sum(dt < dt_min for dt in time_diff)
+            # Trigger a re-sample if event is from the 0039-0040 winter
+            if ((new_sample_time.year == 39) and (new_sample_time.month > 6)) or ((new_sample_time.year == 40) and (new_sample_time.month < 6)):
+                num_alike = np.inf
+        samples[idx] = new_sample
+        ordinal_times[idx] = new_ordinal_time
+        num_draws[idx] = draw
+    
+    # Pull coordinate values cooresponding to samples
+    sample_times, sample_times_idx = samples2values(samples, sorted_idx[0], times)
+    sample_lat, sample_lat_idx = samples2values(samples, sorted_idx[1], latitudes)
+    sample_lon, sample_lon_idx = samples2values(samples, sorted_idx[2], longitudes)
+    sample_temp_anomaly = [temperature_anomaly[t, la, lo] for t,la,lo in zip(sample_times_idx, sample_lat_idx, sample_lon_idx)]
+
+    # Convert sampled times to ordinal time and datestring
+    ordinal_times = cftime.date2num(sample_times, 'days since 0001-01-01 00:00:00', calendar='noleap')
+    datestrings = [t.strftime() for t in sample_times]
+
+    # Construct events DataFrame
+    events = pd.DataFrame.from_dict({'time': ordinal_times, 'date': datestrings, 'cftime date': sample_times,
+                                          'lat': sample_lat, 'lon': sample_lon, 'temp anomaly': sample_temp_anomaly})
+    return events, num_draws
+
 
 def find_coldest(climatology_dict, number_of_events, distinct_conditions):
     """
