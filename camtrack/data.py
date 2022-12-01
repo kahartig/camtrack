@@ -710,21 +710,18 @@ def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_boun
     masked_variable = subset_variable.where(subset_mask > mask_threshold, np.nan)
     return masked_variable
 
-
-def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj_dir, data_dir, case_name):
+def make_CONTROL(event, unique_ID, traj_heights, track_time, control_dir, traj_dir, arl_path):
     '''
     Generate the CONTROL file that HYSPLIT uses to set up a backtracking run
     based on a time and location stored in 'event'
 
-    Also creates two directories:
-        output_dir: where CONTROL files are placed after creation
+    Also creates two directories, if they do not already exist:
+        control_dir: where CONTROL files are placed after creation
         traj_dir: where trajectory files will be placed when HYSPLIT is run with
             these CONTROL files
 
-    CONTROL files will be named CONTROL_<event_ID>
-    trajectory files will be named traj_event<event_ID>.traj
-    Assumes that input data files are named case_name+'_YYYY.arl' where e.g.
-        YYYY=0910 for the 0009-0010 winter
+    CONTROL files will be named CONTROL_<unique_ID>
+    trajectory files will be named traj_event<unique_ID>.traj
 
     Parameters
     ----------
@@ -734,31 +731,32 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
             'time': time of event in days since 0001-01-01 on 'noleap' calendar
             'lat': latitude of event in degrees on -90 to 90 scale
             'lon': longitude of event in degrees on 0 to 360 scale
-    event_ID: int
+    unique_ID: str
         unique identifier for the event, used to make CONTROL file name:
-        CONTROL_<event ID>
+            CONTROL_<unique_ID>
+        and .traj file name:
+            traj_event<unique_ID>.traj
     traj_heights: array-like
         starting heights in meters for each trajectory
-    backtrack_time: int
-        number of hours to follow each trajectory back in time
-    output_dir: string
+    track_time: int
+        number of hours to follow each trajectory
+        Negative for backwards trajectory, positive for forwards
+    control_dir: string
         output directory for CONTROL files
     traj_dir: string
         HYSPLIT directory to output trajectory files, which will be named:
         traj_event<event_ID>.traj
-    data_dir: string
-        path name of parent directory containing the binary format data file
-        case_name+'_YYYY.arl'
-    case_name: string
-        case name of CESM run and prefix of .nc and .arl data files
+    arl_path: string
+        full path name of .arl meteorological file corresponding to this event
+        Will be split with os.path.split() into a directory and file name
     '''
     # Set up file paths
-    data_path = os.path.join(data_dir, '')  # with trailing slash
-    data_filename = case_name + '_event' + str(event_ID) + '.arl'
+    arl_dir, arl_filename = os.path.split(arl_path)
+    arl_dir = os.path.join(arl_dir, '') # add trailing slash if not already there
     traj_dir = os.path.join(traj_dir, '') # add trailing slash if not already there
-    control_path = os.path.join(output_dir, 'CONTROL_' + str(event_ID))
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    control_path = os.path.join(control_dir, 'CONTROL_' + unique_ID)
+    if not os.path.exists(control_dir):
+        os.makedirs(control_dir)
     if not os.path.exists(traj_dir):
         os.makedirs(traj_dir)
 
@@ -778,8 +776,8 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         # Starting positions:
         for ht in traj_heights:
             f.write('{:.1f} {:.1f} {:.1f}\n'.format(lat, lon, ht))
-        # Duration of backtrack in hours:
-        f.write('-{:d}\n'.format(backtrack_time))
+        # Duration of trajectory in hours:
+        f.write('{:d}\n'.format(track_time))
         # Vertical motion option:
         f.write('0\n') # 0 to use data's vertical velocity fields
         # Top of model:
@@ -787,13 +785,13 @@ def make_CONTROL(event, event_ID, traj_heights, backtrack_time, output_dir, traj
         # Number of input files:
         f.write('1\n')
         # Input file path:
-        f.write(data_path + '\n')
+        f.write(arl_dir + '\n')
         # Input file name:
-        f.write(data_filename + '\n')
+        f.write(arl_filename + '\n')
         # Output trajectory file path:
         f.write(traj_dir + '\n')
         # Output trajectory file name:
-        f.write('traj_event{:02d}.traj\n'.format(event_ID))
+        f.write('traj_{}.traj\n'.format(unique_ID))
 
 def winter_string(ordinal_time, out_format):
     '''
