@@ -731,7 +731,7 @@ def make_CONTROL(event, unique_ID, traj_heights, track_time, control_dir, traj_d
             these CONTROL files
 
     CONTROL files will be named CONTROL_<unique_ID>
-    trajectory files will be named traj_event<unique_ID>.traj
+    trajectory files will be named traj_<unique_ID>.traj
 
     Parameters
     ----------
@@ -745,7 +745,7 @@ def make_CONTROL(event, unique_ID, traj_heights, track_time, control_dir, traj_d
         unique identifier for the event, used to make CONTROL file name:
             CONTROL_<unique_ID>
         and .traj file name:
-            traj_event<unique_ID>.traj
+            traj_<unique_ID>.traj
     traj_heights: array-like
         starting heights in meters for each trajectory
     track_time: int
@@ -755,7 +755,7 @@ def make_CONTROL(event, unique_ID, traj_heights, track_time, control_dir, traj_d
         output directory for CONTROL files
     traj_dir: string
         HYSPLIT directory to output trajectory files, which will be named:
-        traj_event<event_ID>.traj
+        traj_<unique_ID>.traj
     arl_path: string
         full path name of .arl meteorological file corresponding to this event
         Will be split with os.path.split() into a directory and file name
