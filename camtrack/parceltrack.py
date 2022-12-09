@@ -208,7 +208,7 @@ class ClimateAlongTrajectory:
 
         if hardcoded:
             # Hard-coded variable
-            self.add_hardcoded_variable(variable)
+            self.add_hardcoded_variable(variable, below_LML)
 
         else:
             # Load variable dimensions
@@ -230,7 +230,7 @@ class ClimateAlongTrajectory:
                 raise ValueError('The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lat, lon) or (time, lev, lat, lon)'.format(variable, data_dims))
 
 
-    def add_hardcoded_variable(self, variable):
+    def add_hardcoded_variable(self, variable, below_LML):
         '''
         Add a hard-coded variable along trajectory path
 
@@ -243,13 +243,13 @@ class ClimateAlongTrajectory:
         if variable_key not in self.hc_requires.keys():
             raise ValueError('Invalid variable key for a hard-coded variable {}. Check self.hc_requires for a list of valid hard-coded variables'.format(variable_key))
         # are required variables present in CAM file?
-        self.check_variable_exists(variable)
+        self.check_variable_exists(variable_key)
         # do required variables already exist in self.data?
         required = self.hc_requires[variable_key]
         if required is not None:
             for var in required:
                 if var not in self.data.data_vars:
-                    self.add_variable(var)
+                    self.add_variable(var, below_LML)
 
         if variable == 'THETA':
             p_0 = 1e5 # reference pressure 1,000 hPa
@@ -259,7 +259,7 @@ class ClimateAlongTrajectory:
             values = T_values * (p_0 / p_values)**kappa
             values.name = variable
             values = values.assign_attrs({'units': 'K', 'long_name': 'Potential temperature'})
-            variable_name = variable
+            variable_name = variable_key
         elif variable == 'DSE':
             # Specific heat
             c_p_dry = 1005.7 # specific heat of dry air, J/kg*K
@@ -277,7 +277,7 @@ class ClimateAlongTrajectory:
             values = self.data['T:1D'] + (g/c_p)*self.data['Z3:1D']
             values.name = variable
             values = values.assign_attrs({'units': 'K', 'long_name': 'Dry static energy'})
-            variable_name = variable
+            variable_name = variable_key
         else:
             raise ValueError('Invalid variable key for a hard-coded variable {}. Check self.hc_requires for a list of valid hard-coded variables'.format(variable_key))
 
