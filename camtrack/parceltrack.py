@@ -18,9 +18,6 @@ import datetime
 import calendar
 import scipy # for qhull error
 
-# NCL/NGL imports
-import Ngl
-
 # Scipy imports
 from scipy.interpolate import griddata
 

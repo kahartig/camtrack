@@ -25,7 +25,6 @@ import os
 import cftime
 import datetime
 import calendar
-import Ngl
 import scipy.interpolate as interpolate
 
 # camtrack imports
@@ -451,8 +450,6 @@ class WinterCAM:
     -------
     variable
         retrieve a variable by name from WinterCAM.dataset
-    interpolate
-        interpolate the given DataArray onto pressure levels
 
     Attributes
     ----------
@@ -539,135 +536,6 @@ class WinterCAM:
         self.dataset.data_vars
         '''
         return self.dataset[key]
-
-    def interpolate(self, variable_da, pressure_levels, interpolation='linear', extrapolate=False, fill_value=np.nan):
-        '''
-        Interpolate data from CAM hybrid levels onto pressure levels
-
-        If interpolating temperature or specific humidity (variable_da.name is
-        'T' or 'Q'), add on corresponding surface-level data ('TREFHT' or
-        'QREFHT') before interpolating to pressure levels
-
-        Parameters
-        ----------
-        variable_da: xarray.DataArray
-            data in three spatial dimensions + time, where the vertical spatial
-            dimension 'lev' is CAM hybrid levels and runs from top-of-atmosphere
-            to surface
-        pressure_levels: array-like
-            one-dimensional array of pressure levels, in Pa, to interpolate onto
-            Can be either ascending or descending
-        interpolation: string
-            interpolation method. Options are 'linear', 'log', and 'log-log'.
-            Default is 'linear'
-        extrapolate: boolean
-            if True, extrapolation is permitted even when a pressure level is
-            beyond the range of the surface pressure.
-            Default is False
-        fill_value: float or NaN
-            if extrapolate=True, replaces values outside of extrapolation range
-            (where pressure_levels is beyond the range allowed by surface
-            pressure)
-
-        Returns
-        -------
-        variable_da_on_p_levels: xarray.DataArray
-            variable data interpolated from hybrid levels onto pressure levels
-            using PyNGL's vinth2p interpolation function.
-            Has dimensions ('time', 'pres', 'lat', 'lon') where the coordinates
-            of 'pres' were given in pressure_levels
-
-        '''
-        # Check nc files for required variables
-        required_variables = ['P0', 'hyam', 'hybm', 'PS']
-        for key in required_variables:
-            if key not in self.dataset.data_vars:
-                raise KeyError('WinterCAM file is missing variable {}, which is\
-                    required for interpolation.'.format(key))
-
-        # Check that variable has 3 spatial dimensions
-        required_dims = ('time', 'lev', 'lat', 'lon')
-        if variable_da.dims != required_dims:
-            raise ValueError('Variable DataArray has dimensions {}; must have \
-                dimensions {} for interpolation onto pressure levels'.format(
-                    variable_da.dims, required_dims))
-
-        # Determine range of variable data
-        time_slice = variable_da.time
-        lat_slice = variable_da.lat
-        lon_slice = variable_da.lon
-
-        # Determine whether input variable duplicated lon=0 as lon=360
-        roll_lon = max(lon_slice) > max(self.variable('lon').values)
-
-        # Extract hybrid level information from CAM files
-        p_0_mb = self.variable('P0').values.item()/100 # p0 must be in mb
-        hyam = self.variable('hyam').values
-        hybm = self.variable('hybm').values
-
-        # Set up interpolation arguments
-        pressure_levels_mb = pressure_levels/100 # Ngl.vinth2p requires pressure levels in mb
-        if interpolation == 'linear':
-            interp_flag = 1
-        elif interpolation == 'log':
-            interp_flag = 2
-        elif interpolation == 'log-log':
-            interp_flag = 3
-        else:
-            raise ValueError('Invalid interpolation method {}. Interpolation must be linear, log, or log-log'.format(interpolation))
-        if roll_lon:
-            reduced_p_surf = self.variable('PS').sel(time=time_slice)
-            rolled_p_surf = assist.roll_longitude(reduced_p_surf)
-            p_surf = rolled_p_surf.sel(lat=lat_slice, lon=lon_slice).values
-        else:
-            p_surf = self.variable('PS').sel(time=time_slice, lat=lat_slice, lon=lon_slice).values
-        
-        # Interpolate onto pressure levels
-        replacement_threshold = 1e29
-        if (not extrapolate) and (np.any(variable_da.values >= replacement_threshold)):
-            raise ValueError('Some values in the data array are larger than the\
-                threshold used to identify and replace extrapolated data ({}).\
-                Either set extrapolate=True or scale down the input array by a\
-                few order of magnitude before interpolating'.format(
-                    replacement_threshold))
-
-        # If interpolating temperature or humidity, add on surface-level data
-        variable_values = variable_da.values
-        if (variable_da.name == 'T') or (variable_da.name == 'Q'):
-            hyam_surf = 0.
-            hybm_surf = 0.999
-            hyam = np.append(self.variable('hyam').values, hyam_surf)
-            hybm = np.append(self.variable('hybm').values, hybm_surf)
-            # Add singleton 'lev' dimension to ?REFHT (surface-level data)
-            surface_key = variable_da.name + 'REFHT'
-            if roll_lon:
-                reduced_surf_data = self.variable(surface_key).sel(time=time_slice)
-                rolled_surf_data = assist.roll_longitude(reduced_surf_data)
-                subset_surf_data = rolled_surf_data.sel(lat=lat_slice, lon=lon_slice)
-            else:
-                subset_surf_data = self.variable(surface_key).sel(time=time_slice, lat=lat_slice, lon=lon_slice)
-            surf_newcoord = subset_surf_data.assign_coords(lev=1000*(hyam_surf + hybm_surf))
-            surf_expanded = surf_newcoord.expand_dims('lev')
-            # Concatenate surface-level data onto 3-D
-            variable_values = xr.concat([variable_da, surf_expanded], dim='lev').values
-
-        on_p_levels = Ngl.vinth2p(variable_values, hyam, hybm, pressure_levels_mb, p_surf, interp_flag, p_0_mb, 1, extrapolate)
-        
-        # If extrapolation is False, replace default fill value
-        # (1e30 > replacement_threshold) with designated fill_value
-        if not extrapolate:
-            on_p_levels = np.where(on_p_levels >= replacement_threshold, fill_value, on_p_levels)
-        
-        # Bundle into a DataArray
-        variable_da_on_p_levels = xr.DataArray(on_p_levels,
-            name=variable_da.name,
-            dims=('time', 'pres', 'lat', 'lon'),
-            coords={'time': variable_da['time'].values,
-                    'pres': pressure_levels,
-                    'lat': variable_da['lat'].values,
-                    'lon': variable_da['lon'].values},
-            attrs=variable_da.attrs)
-        return variable_da_on_p_levels
 
 
 def subset_and_mask(winter_file, variable_key, time_bounds, lat_bounds, lon_bounds, mask_by='LANDFRAC', mask_threshold=0.9):
