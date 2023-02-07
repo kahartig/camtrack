@@ -71,13 +71,13 @@ class ClimateAlongTrajectory:
         output frequency matches that of CAM file
     data: xarray Dataset
         values of 2-D and 3-D variables along the trajectory. Dimensions are
-        'time' and possibly 'pres' (if there are any 3-D variables). 2-D
-        variables have 'time' dimension and 3-D have 'time' and 'pres'. Lat and
-        lon are included as coordinate arrays with dimension 'time' and reflect
-        trajectory path, or nearest-neighbor equivalent on CAM coordinates
+        'time' and possibly 'plev' (if there are any 3-D to 2-D variables). 2-D
+        variables have 'time' dimension and 3-D have 'time' (for 3-D to 1-D)
+        or 'time' and 'plev' (for 3-D to 2-D). Lat, lon, and pres are included
+        as coordinate arrays with dimension 'time' and reflect trajectory location
     '''
 
-    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, below_LML='NaN'):
+    def __init__(self, winter_file, trajectories, trajectory_number, variables, traj_interpolation, below_LML='NaN', pressure_levels=None):
         '''
         Parameters
         ----------
@@ -94,10 +94,12 @@ class ClimateAlongTrajectory:
             of special variables:
                 ends in ':1D': 3-D+time variable to be interpolated directly
                     onto trajectory path
+                ends in ':2D': 3-D+time variable interpolated onto vertical profiles
+                    in pressure coordinates along trajectory path
                 ends in ':hc': hard-coded variable with special handling
                     Available options:
-                    'LWP:hc': liquid water path (vertical integral of 'Q')
                     'THETA:hc': potential temperature
+                    'DSE:hc': dry static energy
         traj_interpolation: 'nearest' or 'linear'
             interpolation method for matching trajectory lat-lon to CAM variables
         below_LML: string
@@ -105,6 +107,9 @@ class ClimateAlongTrajectory:
             if 'NaN': return np.nan
             if 'LML': return value at lowest model level (above parcel)
             Default is 'NaN'.
+        pressure_levels: array-like
+            array of shared pressure values to interpolate 3-D+time variables onto when
+            requesting 3-D to 2-D interpolation (vertical profiles along trajectory)
 
         '''
         # Store initial attributes
@@ -154,10 +159,10 @@ class ClimateAlongTrajectory:
 
         # Store requested climate variables
         for key in variables:
-            self.add_variable(key, below_LML)
+            self.add_variable(key, below_LML, pressure_levels)
 
 
-    def add_variable(self, variable_key, below_LML='NaN'):
+    def add_variable(self, variable_key, below_LML='NaN', pressure_levels=None):
         '''
         Interpolate a new variable onto trajectory path
 
@@ -169,8 +174,8 @@ class ClimateAlongTrajectory:
             to interpolate onto pressure as well as time, lat, and lon
               (collapse vertical dimension), add ':1D' to end of variable name
               e.g. 'OMEGA:1D'
-            interpolating onto time, lat, and lon and retaining the vertical
-              dimension is not currently supported
+            to interpolate vertical profiles along trajectory, add ':2D' to end
+              of variable name, e.g. 'OMEGA:2D', and provide pressure_levels
 
         Parameters
         ----------
@@ -180,6 +185,8 @@ class ClimateAlongTrajectory:
             of special variables:
                 ends in ':1D': 3-D+time variable to be interpolated directly
                     onto trajectory path, e.g. 'T:1D'
+                ends in ':2D': 3-D+time variable interpolated onto vertical profiles
+                    in pressure coordinates along trajectory path
                 ends in ':hc': hard-coded variable with special handling
                     See self.hc_requires for valid hard-coded variables
         below_LML: string
@@ -188,14 +195,21 @@ class ClimateAlongTrajectory:
             if 'NaN': return np.nan
             if 'LML': return value at lowest model level (above parcel)
             Default is 'NaN'.
+        pressure_levels: array-like
+            shared pressure levels in Pa of the vertical profiles;
+              for interpolation onto 2D only
+            Default is None.
         '''
         # Identify if variable requires special handling
         to_1D = False
+        to_2D = False
         hardcoded = False
         if ':' in variable_key:
             variable, tag = variable_key.split(':', 1)
             if tag == '1D':
                 to_1D = True
+            elif tag == '2D':
+                to_2D = True
             elif tag == 'hc':
                 hardcoded = True
             else:
@@ -219,8 +233,10 @@ class ClimateAlongTrajectory:
             elif data_dims == ('time', 'lev', 'lat', 'lon'):
                 if to_1D:
                     self.add_3Dto1D_variable(variable, below_LML)
+                elif to_2D:
+                    self.add_3Dto2D_variable(variable, pressure_levels)
                 else:
-                    raise NotImplementedError("Interpolating 3-D variables only onto time, lat, and lon has not been implemented; must add ':1D' to end of variable name and interpolate onto pressure as well")
+                    raise NotImplementedError("Only interpolation onto trajectory path with :1D or onto shared vertical profiles in pressure with :2D are allowed")
 
             # Error: invalid/unexpected dimensions
             else:
@@ -395,6 +411,74 @@ class ClimateAlongTrajectory:
         # Update Dataset with new DataArray
         self.data[variable_name] = values
 
+    def add_3Dto2D_variable(self, variable, pressure_levels):
+        '''
+        Interpolate (time, lev, lat, lon) variable onto shared pressure levels to generate vertical profiles
+        '''
+        # Checks
+        # is variable present in CAM file?
+        self.check_variable_exists(variable)
+        # does variable have the correct dimensions?
+        variable_data = self.winter_file.variable(variable)
+        if variable_data.dims != ('time', 'lev', 'lat', 'lon'):
+            raise ValueError("The requested variable {} has unexpected dimensions {}. Dimensions must be (time, lev, lat, lon)".format(variable, variable_data.dims))
+        # set up for vertical interpolation, if it has never been done before
+        if not self.ready_pinterp:
+            self.setup_pinterp()
+
+        # Identify a corresponding surface-level variable, if any
+        surface_counterpart = {'T': 'TREFHT', 'Q': 'QREFHT', 'RELHUM': 'RHREFHT', 'Z3': 'PHIS'} # map upper-level variables to surface-level counterparts
+        if (variable in surface_counterpart.keys()) and (surface_counterpart[variable] in self.winter_file.dataset.data_vars):
+            surf_available = True
+            if surface_counterpart[variable] == 'PHIS':
+                surf_scale = 1/9.8 # convert m2/s2 to m to match Z3
+            else:
+                surf_scale = 1.0
+        else:
+            surf_available = False
+
+        values = np.zeros((len(pressure_levels), len(self.trajectory))) # (pressure, time)
+        t_idx = 0
+        for age, point in self.trajectory.iterrows():
+            time = point['cftime date']
+            variable_at_time = variable_data.sel(time=time, method='nearest', tolerance=self.dt_tol)
+
+            # If available, load surface-level data
+            if surf_available:
+                add_surf = True
+                surf_at_time = self.winter_file.variable(surface_counterpart[variable]).sel(time=time, method='nearest', tolerance=self.dt_tol)
+            else:
+                add_surf = False
+
+            # Account for periodicity in lon by duplicating lon=0 as lon=360, if necessary
+            if point['lon'] > max(variable_data['lon'].values):
+                variable_at_time = assist.roll_longitude(variable_at_time)
+                if add_surf:
+                    surf_at_time = assist.roll_longitude(surf_at_time)
+            
+            # Interpolate onto trajectory
+            vertical_profile = variable_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+            # switch to pressure levels
+            P_surf = self.data['PS'].sel(time=time, method='nearest', tolerance=self.dt_tol).item()
+            vertical_profile = vertical_profile.assign_coords(plev=("lev", self.P0*self.hyam.values + P_surf*self.hybm.values))
+            vertical_profile = vertical_profile.swap_dims({"lev": "plev"})
+            if add_surf:
+                # append surface-level value below lowest model level
+                surface_value = surf_scale * surf_at_time.interp(lat=point['lat'], lon=point['lon'], method=self.traj_interpolation)
+                surface_value = surface_value.assign_coords({'plev': P_surf}) # assign surface pressure to surface-level value
+                vertical_profile = xr.concat([vertical_profile.reset_coords('lev', drop=True), surface_value], dim='plev')
+            # interpolate onto fixed pressure levels
+            values[:, t_idx] = vertical_profile.interp(plev=pressure_levels, method=self.traj_interpolation)
+            t_idx = t_idx + 1
+        # Bundle into DataArray
+        variable_name = variable + ':2D'
+        values = xr.DataArray(values, name=variable_name,
+                            dims=('plev', 'time',),
+                            coords={'time': self.traj_time, 'plev': pressure_levels, 'lat': self.traj_lat, 'lon': self.traj_lon},
+                            attrs=variable_data.attrs)
+
+        # Update Dataset with new DataArray
+        self.data[variable_name] = values
 
     def setup_pinterp(self):
         '''
